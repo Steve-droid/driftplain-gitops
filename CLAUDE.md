@@ -1,14 +1,14 @@
-# CLAUDE.md — modelmatch-gitops
+# CLAUDE.md — driftplain-gitops
 
 > **P38r (September 12, 2026):** Driftplain DNS and trusted app/API HTTPS are verified; the existing Google client has the new origin, verified ownership and published branding. `runtimeHostSet=driftplain` selects api.driftplain.dev while retaining Modicum and sslip.io.
 
-> Driftplain was previously Modicum / ModelMatch. Repository and infrastructure identifiers retain `modelmatch` for compatibility.
+> Driftplain was previously Modicum / ModelMatch. The four public repositories use `driftplain-*`; existing infrastructure, images, database names, metrics and CI credential/environment identifiers retain `modelmatch` for compatibility.
 
 **Status: ACTIVE.** The GitOps repo for Driftplain: the Helm umbrella + (later) ArgoCD app-of-apps that
 deploy the cluster. Activated at **P9 (2026-06-14)** when the Helm umbrella was authored.
 
 > Polyrepo: this is its **own git repo** — branches/commits/tags happen **here**, not in
-> `modelmatch-infra`. See the umbrella `../CLAUDE.md` (working style, git strategy, stack) and
+> `driftplain-infra`. See the umbrella `../CLAUDE.md` (working style, git strategy, stack) and
 > `../docs/planning/01-devops-backlog.md` E12 rows for the slice plan.
 
 ## What this repo is
@@ -20,7 +20,7 @@ The **GitOps source of truth** for everything that runs *inside* the EKS cluster
 2. **ArgoCD app-of-apps** (from **P10**) — a root Application that points at this repo and fans out to
    platform child-apps (Nginx ingress, cert-manager, ESO, monitoring, logging) + the product chart.
 
-**The deploy boundary:** CI (Jenkins, in `modelmatch-backend`/`-frontend`) builds images, pushes to ECR,
+**The deploy boundary:** CI (Jenkins, in `driftplain-backend`/`-frontend`) builds images, pushes to ECR,
 and **commits an image-tag bump here**; **ArgoCD** is the only thing that ever applies to the cluster.
 Humans author chart structure; the CI Deploy stage edits image tags; ArgoCD syncs. **Never
 `helm install` / `kubectl apply` app resources by hand** — that breaks the GitOps invariant.

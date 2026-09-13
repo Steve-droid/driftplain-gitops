@@ -1,7 +1,7 @@
 apiVersion: v2
 name: monitoring
 description: >-
-  ModelMatch observability extras delivered alongside kube-prometheus-stack (P20):
+  Driftplain observability extras delivered alongside kube-prometheus-stack (P20):
   the Grafana application dashboard, provisioned as code via a sidecar-imported
   ConfigMap (label grafana_dashboard=1) so it survives a Grafana redeploy.
 type: application

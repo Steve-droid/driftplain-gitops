@@ -1,4 +1,4 @@
-# P20 — ModelMatch Grafana app dashboard (in-repo chart) as an ArgoCD child app (E13).
+# P20 — Driftplain Grafana app dashboard (in-repo chart) as an ArgoCD child app (E13).
 #
 # Ships the application dashboard as a labelled ConfigMap (grafana_dashboard=1) that the
 # kube-prometheus-stack Grafana sidecar imports — dashboards-as-code, so the panels
@@ -21,7 +21,7 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://github.com/Steve-droid/modelmatch-gitops.git
+    repoURL: https://github.com/Steve-droid/driftplain-gitops.git
     targetRevision: main
     path: charts/monitoring
   destination:

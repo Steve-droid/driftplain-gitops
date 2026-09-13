@@ -1,7 +1,7 @@
 apiVersion: v2
 name: modelmatch-postgres
 description: >-
-  In-cluster PostgreSQL 16 for ModelMatch — a CloudNativePG `Cluster` (1 primary
+  In-cluster PostgreSQL 16 for Driftplain — a CloudNativePG `Cluster` (1 primary
   + 1 streaming replica) on an EBS-CSI-backed PVC, plus the Alembic schema
   migration run as a PostSync Job/Helm hook (never on backend startup). P13.
 type: application

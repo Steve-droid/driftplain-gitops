@@ -1,4 +1,4 @@
-# P14 — the ModelMatch product umbrella (frontend + backend) as an ArgoCD child app.
+# P14 — the Driftplain product umbrella (frontend + backend) as an ArgoCD child app.
 #
 # Renders the in-repo charts/modelmatch umbrella: the backend Deployment/Service/
 # ConfigMap + its IRSA ServiceAccount (role A) and the frontend Deployment/Service/
@@ -26,7 +26,7 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://github.com/Steve-droid/modelmatch-gitops.git
+    repoURL: https://github.com/Steve-droid/driftplain-gitops.git
     targetRevision: main
     path: charts/modelmatch
   destination:
