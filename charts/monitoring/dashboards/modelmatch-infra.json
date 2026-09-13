@@ -4,7 +4,7 @@
   "graphTooltip": 1,
   "schemaVersion": 39,
   "tags": ["modelmatch", "infra", "devops"],
-  "title": "ModelMatch — Infra/DevOps (P21)",
+  "title": "Driftplain — Infra/DevOps (P21)",
   "uid": "modelmatch-infra",
   "time": { "from": "now-1h", "to": "now" },
   "refresh": "30s",

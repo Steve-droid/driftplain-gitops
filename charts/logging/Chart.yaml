@@ -1,4 +1,4 @@
-# logging — the EFK data plane for ModelMatch (P23, E13 Observability).
+# logging — the EFK data plane for Driftplain (P23, E13 Observability).
 #
 # A tiny standalone chart (its own ArgoCD child app), deliberately NOT an umbrella
 # subchart: Elasticsearch/Kibana are cluster-platform concerns (managed by the ECK
@@ -16,7 +16,7 @@
 apiVersion: v2
 name: logging
 description: >-
-  ModelMatch EFK data plane — ECK Elasticsearch (single-node, emptyDir) + Kibana CRs,
+  Driftplain EFK data plane — ECK Elasticsearch (single-node, emptyDir) + Kibana CRs,
   plus the ILM retention bootstrap (delete @ 3 days). Fluent Bit ships logs in (own app).
 type: application
 # Chart version — bumped per chart change (independent of the gitops repo SemVer tag).

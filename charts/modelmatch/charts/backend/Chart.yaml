@@ -1,6 +1,6 @@
 apiVersion: v2
 name: backend
-description: ModelMatch FastAPI backend (recommender, ingestion #3, chat #4, savings).
+description: Driftplain FastAPI backend (recommender, ingestion #3, chat #4, savings).
 type: application
 version: 0.1.0
 appVersion: "1.0.0"

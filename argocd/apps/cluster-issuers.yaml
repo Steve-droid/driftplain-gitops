@@ -28,7 +28,7 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://github.com/Steve-droid/modelmatch-gitops.git
+    repoURL: https://github.com/Steve-droid/driftplain-gitops.git
     targetRevision: main
     path: charts/cluster-issuers
   destination:

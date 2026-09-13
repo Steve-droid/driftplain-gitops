@@ -1,4 +1,4 @@
-# cluster-issuers — cert-manager ClusterIssuers for ModelMatch ingress TLS (P15).
+# cluster-issuers — cert-manager ClusterIssuers for Driftplain ingress TLS (P15).
 #
 # A tiny standalone chart (its own ArgoCD child app), deliberately NOT an umbrella
 # subchart: ClusterIssuers are CLUSTER-SCOPED resources tied to cert-manager, not the
@@ -10,7 +10,7 @@
 # annotation. Depends on the cert-manager CRDs (the cert-manager child app, P11).
 apiVersion: v2
 name: cluster-issuers
-description: cert-manager Let's Encrypt ClusterIssuers (HTTP-01) for ModelMatch ingress TLS.
+description: cert-manager Let's Encrypt ClusterIssuers (HTTP-01) for Driftplain ingress TLS.
 type: application
 version: 0.1.0
 appVersion: "1.20.2"

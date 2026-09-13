@@ -1,16 +1,17 @@
-# Driftplain — Gitops
+# Driftplain — GitOps
+
+[Website](https://driftplain.dev) · [Frontend](https://github.com/Steve-droid/driftplain-frontend) · [Backend](https://github.com/Steve-droid/driftplain-backend) · [Infra](https://github.com/Steve-droid/driftplain-infra) · [GitOps](https://github.com/Steve-droid/driftplain-gitops)
 
 > **P38r — shipped September 12, 2026:** Driftplain is live at **https://driftplain.dev**, with **https://api.driftplain.dev** as its runtime API. Trusted HTTPS, Google domain ownership, published Google branding and real sign-in are verified. Modicum/sslip.io endpoints and operational identifiers remain compatible. FE/BE 1.0.24, agents 1.1.3; runtime cutover GitOps v0.18.22.
 
 
 > **2026-09-09 DNS follow-up:** Route 53 delegation and trusted HTTPS are verified for modicum.cloud and api.modicum.cloud. These values prepare the reviewed runtime URL cutover; legacy sslip.io routes remain available. Cutover deployment is pending.
 
-> Driftplain was previously Modicum / ModelMatch. Repository and infrastructure identifiers retain `modelmatch` for compatibility.
+> Driftplain was previously Modicum / ModelMatch. The four public repositories use `driftplain-*`; existing infrastructure, images, database names, metrics and CI credential/environment identifiers retain `modelmatch` for compatibility.
 
 > **ACTIVE** (since P9). The GitOps source of truth for everything that runs **inside** the EKS cluster —
-> a Helm umbrella + an ArgoCD **App-of-Apps**. Part of the [Driftplain portfolio build](../CLAUDE.md);
-> spec in [`../docs/planning/architecture.md`](../docs/planning/architecture.md) §12–§13 and
-> `../docs/instructions/lesson-03`. See [`CLAUDE.md`](CLAUDE.md) for the chart layout + hard rules.
+> a Helm umbrella + an ArgoCD **App-of-Apps**. Part of the four-repository Driftplain project linked above.
+> See [`CLAUDE.md`](CLAUDE.md) for the chart layout + hard rules.
 
 ## Table of Contents
 
@@ -31,7 +32,7 @@ The GitOps repo holds the desired state of the cluster. Two layers:
 1. **The Driftplain product chart** — `charts/modelmatch/`, a Helm **umbrella** with **frontend** +
    **backend** local subcharts plus the host-based `Ingress` templates. One release boundary for the app.
 2. **Platform charts + ArgoCD App-of-Apps** — a Terraform-seeded **root Application** (in
-   `modelmatch-infra/platform/argocd.tf`) watches `argocd/apps/` and fans out to one child `Application`
+   `driftplain-infra/platform/argocd.tf`) watches `argocd/apps/` and fans out to one child `Application`
    per platform component (ingress controller, cert-manager, ESO, CNPG, monitoring, logging, cluster
    issuers, app secrets) **and** the product chart.
 
@@ -71,7 +72,7 @@ Jenkins (FE/BE repos)                    this repo (git)                 EKS
 ## Repository Structure
 
 ```
-modelmatch-gitops/
+driftplain-gitops/
 ├── charts/
 │   ├── modelmatch/            # umbrella = the product chart (release boundary)
 │   │   ├── Chart.yaml         # deps: backend, frontend (local, condition <name>.enabled)
@@ -210,7 +211,7 @@ API endpoint and do not need POST redirects. Pod config checksums trigger the re
 
 With custom names set, `scripts/recompute-host.sh` fails before editing anything: changing the old
 IP would retire existing snippets. Refresh Route 53's alias target through the infra
-[DNS runbook](../modelmatch-infra/dns/README.md). That runbook covers Porkbun delegation to the Terraform-created zone,
+[DNS runbook](https://github.com/Steve-droid/driftplain-infra/blob/main/dns/README.md). That runbook covers Porkbun delegation to the Terraform-created zone,
 Terraform plan, certificate staging, cutover, rollback, rebuilds, and final teardown.
 A domain change does not migrate browser storage; sign in at the new origin.
 
