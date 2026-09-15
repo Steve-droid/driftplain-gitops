@@ -1,5 +1,8 @@
-"""E21/HM3: the home-server profile is DB-only and the AWS default render is unchanged."""
+"""E21 home-server profile contracts: the AWS renders are unchanged, the home renders carry
+no EKS/IRSA/ESO/EBS/NLB assumptions, and the home root reconciles exactly the reviewed
+children (HM3 database; HM4 platform + app). Requires helm + PyYAML."""
 import pathlib
+import re
 import subprocess
 import unittest
 
@@ -7,24 +10,47 @@ import yaml
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 CHART = ROOT / "charts" / "modelmatch-postgres"
+UMBRELLA = ROOT / "charts" / "modelmatch"
+ISSUERS = ROOT / "charts" / "cluster-issuers"
+HOME_APPS = ROOT / "argocd" / "home-server" / "apps"
+AWS_APPS = ROOT / "argocd" / "apps"
+GHCR = "ghcr.io/steve-droid"
+DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
+HOME_APP_HOST = "app.home-server.driftplain.dev"
+HOME_API_HOST = "api.home-server.driftplain.dev"
+AWS_ONLY = ("dkr.ecr", "eks.amazonaws.com/role-arn", "ebs.csi", "external-secrets.io",
+            "aws-load-balancer", "sslip.io", "letsencrypt", "modicum.cloud", "driftplain.dev\"")
 
 
-def render(*value_files, sets=()):
-    cmd = ["helm", "template", "modelmatch-postgres", str(CHART)]
+def render(chart, *value_files, sets=(), namespace=None, release=None):
+    cmd = ["helm", "template", release or chart.name, str(chart)]
+    if namespace:
+        cmd.extend(["--namespace", namespace])
     for name in value_files:
-        cmd.extend(["-f", str(CHART / name)])
+        cmd.extend(["-f", str(chart / name)])
     for value in sets:
         cmd.extend(["--set", value])
-    result = subprocess.run(cmd, cwd=ROOT, text=True, capture_output=True, check=True)
+    result = subprocess.run(cmd, cwd=ROOT, text=True, capture_output=True)
+    assert result.returncode == 0, result.stderr
     return {(obj["kind"], obj["metadata"]["name"]): obj
             for obj in yaml.safe_load_all(result.stdout) if obj}
 
 
-class AwsDefaultTests(unittest.TestCase):
+def load(path):
+    return yaml.safe_load(path.read_text())
+
+
+def containers(docs, name):
+    return docs["Deployment", name]["spec"]["template"]["spec"]["containers"]
+
+
+# ── HM3: the shared Postgres chart ───────────────────────────────────────────────
+
+class AwsPostgresDefaultTests(unittest.TestCase):
     """The AWS production render must keep every P13 fact after the profile knobs."""
 
     def test_default_render_keeps_aws_contract(self):
-        docs = render()
+        docs = render(CHART)
         self.assertEqual(set(docs), {("StorageClass", "modelmatch-gp3"),
                                      ("ExternalSecret", "modelmatch-db-app"),
                                      ("Cluster", "modelmatch-postgres"),
@@ -39,9 +65,9 @@ class AwsDefaultTests(unittest.TestCase):
         self.assertNotIn("nodeSelector", cluster["affinity"])
 
 
-class HomeServerProfileTests(unittest.TestCase):
+class HomePostgresProfileTests(unittest.TestCase):
     def setUp(self):
-        self.docs = render("values.yaml", "values-home-server.yaml")
+        self.docs = render(CHART, "values.yaml", "values-home-server.yaml")
 
     def test_renders_only_storage_and_one_private_instance(self):
         self.assertEqual(set(self.docs), {("StorageClass", "home-server-retain"),
@@ -78,19 +104,164 @@ class HomeServerProfileTests(unittest.TestCase):
             self.assertNotIn(forbidden, rendered, forbidden)
 
     def test_seed_or_migrate_cannot_be_reenabled_by_a_tag_bump_alone(self):
-        bumped = render("values.yaml", "values-home-server.yaml", sets=("migrate.image.tag=1.0.24",))
+        bumped = render(CHART, "values.yaml", "values-home-server.yaml", sets=("migrate.image.tag=1.0.24",))
         self.assertEqual(bumped, self.docs)
 
 
+# ── HM4: the umbrella (FE + BE + Ingress) ────────────────────────────────────────
+
+class AwsUmbrellaDefaultTests(unittest.TestCase):
+    """The committed AWS values keep ECR-by-tag images and the IRSA annotation."""
+
+    def setUp(self):
+        self.docs = render(UMBRELLA, namespace="app", release="modelmatch")
+
+    def test_images_are_ecr_by_tag(self):
+        for name in ("modelmatch-backend", "modelmatch-frontend"):
+            image = containers(self.docs, name)[0]["image"]
+            self.assertTrue(image.startswith("957261948820.dkr.ecr.ap-south-1.amazonaws.com/"), image)
+            self.assertIn(":1.0.24", image)
+            self.assertNotIn("@sha256", image)
+
+    def test_backend_service_account_keeps_irsa(self):
+        sa = self.docs["ServiceAccount", "modelmatch-backend"]
+        self.assertEqual(sa["metadata"]["annotations"]["eks.amazonaws.com/role-arn"],
+                         "arn:aws:iam::957261948820:role/modelmatch-backend-irsa")
+
+    def test_backend_config_is_bedrock(self):
+        config = self.docs["ConfigMap", "modelmatch-backend-config"]["data"]
+        self.assertEqual(config["LLM_CLIENT"], "bedrock")
+        self.assertNotIn("BLOB_STORE", config)
+
+
+class HomeUmbrellaKnobTests(unittest.TestCase):
+    """The profile knobs alone (no home values file yet) give digest refs and no IRSA."""
+
+    ZERO = "sha256:" + "0" * 64
+
+    def setUp(self):
+        self.docs = render(UMBRELLA, namespace="app", release="modelmatch", sets=(
+            f"backend.image.registry={GHCR}", f"backend.image.digest={self.ZERO}",
+            "backend.serviceAccount.irsaRoleName=",
+            f"frontend.image.registry={GHCR}", f"frontend.image.digest={self.ZERO}"))
+
+    def test_digest_wins_over_tag_and_registry_override_replaces_ecr(self):
+        self.assertEqual(containers(self.docs, "modelmatch-backend")[0]["image"],
+                         f"{GHCR}/modelmatch-backend@{self.ZERO}")
+        self.assertEqual(containers(self.docs, "modelmatch-frontend")[0]["image"],
+                         f"{GHCR}/modelmatch-frontend@{self.ZERO}")
+        # Only the workload images are knob-driven; the AGENT_IMAGE ConfigMap literals are
+        # profile values (values-home-server.yaml), not template knobs.
+        for name in ("modelmatch-backend", "modelmatch-frontend"):
+            self.assertNotIn("dkr.ecr", containers(self.docs, name)[0]["image"])
+
+    def test_empty_irsa_role_omits_the_annotation_but_keeps_the_pinned_name(self):
+        sa = self.docs["ServiceAccount", "modelmatch-backend"]
+        self.assertNotIn("annotations", sa["metadata"])
+        self.assertEqual(self.docs["Deployment", "modelmatch-backend"]["spec"]["template"]["spec"]
+                         ["serviceAccountName"], "modelmatch-backend")
+
+    def test_extra_annotations_still_render_without_irsa(self):
+        docs = render(UMBRELLA, namespace="app", release="modelmatch", sets=(
+            "backend.serviceAccount.irsaRoleName=", "backend.serviceAccount.annotations.example=yes"))
+        self.assertEqual(docs["ServiceAccount", "modelmatch-backend"]["metadata"]["annotations"],
+                         {"example": "yes"})
+
+
+@unittest.skipUnless((UMBRELLA / "values-home-server.yaml").exists(), "home umbrella profile lands with the app child")
+class HomeUmbrellaProfileTests(unittest.TestCase):
+    """charts/modelmatch/values-home-server.yaml — the isolated-validation app profile."""
+
+    def setUp(self):
+        self.docs = render(UMBRELLA, "values.yaml", "values-home-server.yaml", namespace="app", release="modelmatch")
+
+    def test_images_are_public_ghcr_pinned_by_digest(self):
+        for name in ("modelmatch-backend", "modelmatch-frontend"):
+            image = containers(self.docs, name)[0]["image"]
+            registry_repo, _, digest = image.partition("@")
+            self.assertEqual(registry_repo, f"{GHCR}/{name}")
+            self.assertRegex(digest, DIGEST)
+
+    def test_no_aws_only_pieces(self):
+        rendered = str(self.docs)
+        for forbidden in AWS_ONLY:
+            self.assertNotIn(forbidden, rendered, forbidden)
+        self.assertNotIn("annotations", self.docs["ServiceAccount", "modelmatch-backend"]["metadata"])
+
+    def test_isolated_validation_config(self):
+        config = self.docs["ConfigMap", "modelmatch-backend-config"]["data"]
+        self.assertEqual(config["LLM_CLIENT"], "fake")
+        self.assertEqual(config["BLOB_STORE"], "fake")
+        self.assertEqual(config["PUBLIC_BASE_URL"], f"https://{HOME_API_HOST}")
+        self.assertEqual(config["CORS_ALLOW_ORIGINS"], f"https://{HOME_APP_HOST}")
+        self.assertEqual(config["DATABASE_URL"],
+                         "postgresql+psycopg://modelmatch@modelmatch-postgres-rw:5432/modelmatch")
+        self.assertEqual(config["CHAT_READONLY_DB_USER"], "modelmatch_chat_ro")
+        for key in ("AGENT_IMAGE", "AGENT_SECURITY_IMAGE"):
+            registry_repo, _, digest = config[key].partition("@")
+            self.assertTrue(registry_repo.startswith(GHCR + "/modelmatch-agent"), config[key])
+            self.assertRegex(digest, DIGEST)
+        frontend = self.docs["ConfigMap", "modelmatch-frontend-config"]["data"]
+        self.assertEqual(frontend["API_BASE_URL"], f"https://{HOME_API_HOST}")
+
+    def test_private_hosts_only_with_the_home_ca_issuer(self):
+        ingresses = {name: obj for (kind, name), obj in self.docs.items() if kind == "Ingress"}
+        self.assertEqual(set(ingresses), {"modelmatch-app-branded", "modelmatch-app-branded-routes",
+                                          "modelmatch-api-branded", "modelmatch-api-branded-routes",
+                                          "modelmatch-api-branded-auth"})
+        hosts = {rule["host"] for obj in ingresses.values() for rule in obj["spec"]["rules"]}
+        self.assertEqual(hosts, {HOME_APP_HOST, HOME_API_HOST})
+        for master in ("modelmatch-app-branded", "modelmatch-api-branded"):
+            annotations = ingresses[master]["metadata"]["annotations"]
+            self.assertEqual(annotations["cert-manager.io/cluster-issuer"], "home-server-ca")
+            self.assertEqual(ingresses[master]["spec"]["ingressClassName"], "nginx")
+
+    def test_secret_env_and_limits_are_unchanged(self):
+        backend = containers(self.docs, "modelmatch-backend")[0]
+        refs = {env["name"]: env["valueFrom"]["secretKeyRef"] for env in backend["env"]}
+        self.assertEqual({k: (v["name"], v["key"]) for k, v in refs.items()}, {
+            "PGPASSWORD": ("modelmatch-app-secrets", "POSTGRES_PASSWORD"),
+            "JWT_SECRET": ("modelmatch-app-secrets", "JWT_SECRET"),
+            "CHAT_READONLY_DB_PASSWORD": ("modelmatch-app-secrets", "CHAT_READONLY_DB_PASSWORD")})
+        self.assertEqual(backend["resources"]["limits"], {"cpu": "1", "memory": "1Gi"})
+        self.assertEqual(containers(self.docs, "modelmatch-frontend")[0]["resources"]["limits"],
+                         {"cpu": "250m", "memory": "128Mi"})
+
+
+# ── HM4: cluster-issuers ─────────────────────────────────────────────────────────
+
+class ClusterIssuerProfileTests(unittest.TestCase):
+    def test_aws_default_is_the_two_acme_issuers_only(self):
+        docs = render(ISSUERS)
+        self.assertEqual(set(docs), {("ClusterIssuer", "letsencrypt-staging"), ("ClusterIssuer", "letsencrypt-prod")})
+
+    def test_home_profile_is_a_private_ca_chain_without_acme(self):
+        docs = render(ISSUERS, "values.yaml", "values-home-server.yaml")
+        self.assertEqual(set(docs), {("ClusterIssuer", "home-server-selfsigned-bootstrap"),
+                                     ("Certificate", "home-server-ca"),
+                                     ("ClusterIssuer", "home-server-ca")})
+        self.assertEqual(docs["ClusterIssuer", "home-server-selfsigned-bootstrap"]["spec"], {"selfSigned": {}})
+        ca = docs["Certificate", "home-server-ca"]
+        self.assertEqual(ca["metadata"]["namespace"], "cert-manager")
+        self.assertTrue(ca["spec"]["isCA"])
+        self.assertEqual(ca["spec"]["issuerRef"]["name"], "home-server-selfsigned-bootstrap")
+        self.assertEqual(docs["ClusterIssuer", "home-server-ca"]["spec"]["ca"]["secretName"], ca["spec"]["secretName"])
+        self.assertNotIn("acme", str(docs))
+
+
+# ── The home root and its children ───────────────────────────────────────────────
+
 class HomeApplicationTests(unittest.TestCase):
     def load(self, name):
-        return yaml.safe_load((ROOT / "argocd" / "home-server" / "apps" / name).read_text())
+        return load(HOME_APPS / name)
 
     def test_aws_root_does_not_watch_the_home_directory(self):
-        aws_apps = {p.name for p in (ROOT / "argocd" / "apps").glob("*.yaml")}
+        aws_apps = {p.name for p in AWS_APPS.glob("*.yaml")}
         self.assertNotIn("home-server", str(aws_apps))
-        aws_pg = yaml.safe_load((ROOT / "argocd" / "apps" / "modelmatch-postgres.yaml").read_text())
+        self.assertNotIn("sealed-secrets.yaml", aws_apps)
+        aws_pg = load(AWS_APPS / "modelmatch-postgres.yaml")
         self.assertNotIn("helm", aws_pg["spec"]["source"])  # AWS render stays values.yaml only
+        self.assertNotIn("helm", load(AWS_APPS / "cluster-issuers.yaml")["spec"]["source"])
 
     def test_home_postgres_app_layers_the_profile_on_the_same_chart(self):
         app = self.load("modelmatch-postgres.yaml")
@@ -100,16 +271,70 @@ class HomeApplicationTests(unittest.TestCase):
 
     def test_home_operator_pin_supports_kubernetes_1_36_without_touching_aws(self):
         home = self.load("cnpg-operator.yaml")
-        aws = yaml.safe_load((ROOT / "argocd" / "apps" / "cnpg-operator.yaml").read_text())
+        aws = load(AWS_APPS / "cnpg-operator.yaml")
         self.assertEqual(home["spec"]["source"]["targetRevision"], "0.29.0")
         self.assertEqual(aws["spec"]["source"]["targetRevision"], "0.28.3")
+
+    def test_home_ingress_controller_is_private_and_free_of_aws_annotations(self):
+        home = self.load("nginx-ingress.yaml")
+        aws = load(AWS_APPS / "nginx-ingress.yaml")
+        self.assertEqual(home["spec"]["source"]["targetRevision"], aws["spec"]["source"]["targetRevision"])
+        values = yaml.safe_load(home["spec"]["source"]["helm"]["values"])
+        self.assertEqual(values["controller"]["service"], {"type": "ClusterIP"})
+        self.assertFalse(values["controller"]["enableCustomResources"])
+        self.assertTrue(home["spec"]["source"]["helm"]["skipCrds"])
+        self.assertNotIn("ignoreDifferences", home["spec"])
+        self.assertNotIn("aws-load-balancer", str(home))
+        self.assertIn("limits", values["controller"]["resources"])
+
+    def test_home_cert_manager_keeps_the_aws_pin_and_server_side_apply(self):
+        home = self.load("cert-manager.yaml")
+        aws = load(AWS_APPS / "cert-manager.yaml")
+        self.assertEqual(home["spec"]["source"]["targetRevision"], aws["spec"]["source"]["targetRevision"])
+        self.assertEqual(yaml.safe_load(home["spec"]["source"]["helm"]["values"]),
+                         yaml.safe_load(aws["spec"]["source"]["helm"]["values"]))
+        self.assertIn("ServerSideApply=true", home["spec"]["syncPolicy"]["syncOptions"])
+
+    def test_home_cluster_issuers_layer_the_private_ca_profile(self):
+        home = self.load("cluster-issuers.yaml")
+        self.assertEqual(home["spec"]["source"]["path"], "charts/cluster-issuers")
+        self.assertEqual(home["spec"]["source"]["helm"]["valueFiles"], ["values.yaml", "values-home-server.yaml"])
+        self.assertEqual(home["spec"]["destination"]["namespace"], "cert-manager")
+
+    def test_home_sealed_secrets_controller_is_pinned_and_namespaced(self):
+        home = self.load("sealed-secrets.yaml")
+        self.assertEqual((home["spec"]["source"]["repoURL"], home["spec"]["source"]["chart"],
+                          home["spec"]["source"]["targetRevision"]),
+                         ("https://bitnami.github.io/sealed-secrets", "sealed-secrets", "2.20.0"))
+        values = yaml.safe_load(home["spec"]["source"]["helm"]["values"])
+        self.assertEqual(values["fullnameOverride"], "sealed-secrets-controller")
+        self.assertIn("limits", values["resources"])
+        self.assertEqual(home["spec"]["destination"]["namespace"], "sealed-secrets")
+
+    def test_home_sync_waves_order_controllers_before_consumers(self):
+        def wave(name):
+            return int(self.load(name)["metadata"].get("annotations", {}).get("argocd.argoproj.io/sync-wave", "0"))
+        self.assertLess(wave("sealed-secrets.yaml"), wave("cert-manager.yaml"))
+        self.assertLess(wave("cert-manager.yaml"), wave("nginx-ingress.yaml"))
+        self.assertLess(wave("nginx-ingress.yaml"), wave("cluster-issuers.yaml"))
+        self.assertLess(wave("cnpg-operator.yaml"), wave("modelmatch-postgres.yaml"))
+        if (HOME_APPS / "modelmatch.yaml").exists():
+            self.assertLess(wave("cluster-issuers.yaml"), wave("modelmatch.yaml"))
+            self.assertLess(wave("modelmatch-postgres.yaml"), wave("modelmatch.yaml"))
+        if (HOME_APPS / "app-secrets.yaml").exists():
+            self.assertLess(wave("sealed-secrets.yaml"), wave("app-secrets.yaml"))
+            self.assertLess(wave("app-secrets.yaml"), wave("modelmatch-postgres.yaml"))
 
 
 class HomeRootTests(unittest.TestCase):
     """The home root App-of-Apps watches only the home child directory, from main."""
 
+    HM3_CHILDREN = ["cnpg-operator.yaml", "modelmatch-postgres.yaml"]
+    HM4_PLATFORM = ["cert-manager.yaml", "cluster-issuers.yaml", "nginx-ingress.yaml", "sealed-secrets.yaml"]
+    HM4_APP = ["app-secrets.yaml", "modelmatch.yaml"]
+
     def setUp(self):
-        self.root = yaml.safe_load((ROOT / "argocd" / "home-server" / "root.yaml").read_text())
+        self.root = load(ROOT / "argocd" / "home-server" / "root.yaml")
 
     def test_root_watches_the_home_apps_directory_on_main(self):
         self.assertEqual((self.root["kind"], self.root["metadata"]["name"], self.root["metadata"]["namespace"]),
@@ -124,14 +349,20 @@ class HomeRootTests(unittest.TestCase):
         self.assertEqual(self.root["spec"]["syncPolicy"]["automated"], {"prune": True, "selfHeal": True})
         self.assertIn("resources-finalizer.argocd.argoproj.io", self.root["metadata"]["finalizers"])
 
-    def test_root_directory_holds_only_the_db_children_for_hm3(self):
-        children = sorted(p.name for p in (ROOT / "argocd" / "home-server" / "apps").glob("*.yaml"))
-        self.assertEqual(children, ["cnpg-operator.yaml", "modelmatch-postgres.yaml"])
+    def test_root_directory_holds_only_reviewed_children(self):
+        children = sorted(p.name for p in HOME_APPS.glob("*.yaml"))
+        allowed = set(self.HM3_CHILDREN + self.HM4_PLATFORM + self.HM4_APP)
+        self.assertTrue(set(children) <= allowed, children)
+        self.assertTrue(set(self.HM3_CHILDREN + self.HM4_PLATFORM) <= set(children), children)
         for name in children:
-            app = yaml.safe_load((ROOT / "argocd" / "home-server" / "apps" / name).read_text())
+            app = load(HOME_APPS / name)
             self.assertEqual(app["spec"]["destination"]["server"], "https://kubernetes.default.svc")
-            self.assertTrue(app["spec"]["syncPolicy"]["automated"]["prune"])
-            self.assertTrue(app["spec"]["syncPolicy"]["automated"]["selfHeal"])
+            self.assertTrue(app["spec"]["syncPolicy"]["automated"]["prune"], name)
+            self.assertTrue(app["spec"]["syncPolicy"]["automated"]["selfHeal"], name)
+            self.assertIn("resources-finalizer.argocd.argoproj.io", app["metadata"]["finalizers"], name)
+            source = app["spec"]["source"]
+            if "path" in source:
+                self.assertEqual(source["targetRevision"], "main", name)
 
 
 if __name__ == "__main__":

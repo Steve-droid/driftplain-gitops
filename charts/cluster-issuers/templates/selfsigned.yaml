@@ -1,0 +1,54 @@
+{{- /*
+E21/HM4 home profile — a private CA chain (values.selfSigned, off on AWS):
+  1. a SelfSigned ClusterIssuer (bootstrap only — it signs nothing but the CA below);
+  2. one long-lived CA Certificate, in cert-manager's namespace (a CA ClusterIssuer reads
+     its Secret from the "cluster resource namespace", which is cert-manager's own);
+  3. the CA ClusterIssuer the umbrella Ingress annotation names (ingress.clusterIssuer).
+The Ingress leaf certs are then signed by ONE CA whose public cert an operator can trust
+for validation (curl --cacert) instead of trusting every self-signed leaf. Not a public
+trust chain: the public route/TLS is HM5, and these hostnames never enter public DNS.
+*/}}
+{{- if .Values.selfSigned.enabled }}
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: {{ .Values.selfSigned.bootstrapName }}
+  labels:
+    app.kubernetes.io/part-of: modelmatch
+    app.kubernetes.io/component: cluster-issuer
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ .Values.selfSigned.caName }}
+  namespace: {{ .Values.selfSigned.caNamespace }}
+  labels:
+    app.kubernetes.io/part-of: modelmatch
+    app.kubernetes.io/component: cluster-issuer
+spec:
+  isCA: true
+  commonName: {{ .Values.selfSigned.caCommonName | quote }}
+  secretName: {{ .Values.selfSigned.caSecretName }}
+  duration: {{ .Values.selfSigned.caDuration }}
+  renewBefore: {{ .Values.selfSigned.caRenewBefore }}
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  issuerRef:
+    name: {{ .Values.selfSigned.bootstrapName }}
+    kind: ClusterIssuer
+    group: cert-manager.io
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: {{ .Values.selfSigned.name }}
+  labels:
+    app.kubernetes.io/part-of: modelmatch
+    app.kubernetes.io/component: cluster-issuer
+spec:
+  ca:
+    secretName: {{ .Values.selfSigned.caSecretName }}
+{{- end }}

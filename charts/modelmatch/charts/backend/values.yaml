@@ -24,6 +24,11 @@ image:
   # 1.0.1 carries boto3 (built with --extra bedrock) for the in-cluster Bedrock surface.
   tag: "1.0.1"
   pullPolicy: IfNotPresent
+  # E21 profile knobs, both empty on AWS: `registry` replaces the derived ECR host
+  # (home: ghcr.io/steve-droid); `digest` ("sha256:…") pins the ref by content instead
+  # of by tag (home: the reviewed GHCR copy of the same release).
+  registry: ""
+  digest: ""
 
 containerPort: 8000
 
@@ -35,6 +40,7 @@ serviceAccount:
   create: true
   name: modelmatch-backend
   automount: true
+  # Empty = no IRSA annotation at all (E21 home profile); the SA name stays pinned.
   irsaRoleName: modelmatch-backend-irsa
   annotations: {}
 

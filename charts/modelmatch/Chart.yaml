@@ -12,7 +12,9 @@ name: modelmatch
 description: Driftplain — deterministic model recommender + CI savings dashboard (FE + BE).
 type: application
 # Chart version follows the gitops repo's own SemVer line (per-slice cadence).
-version: 0.1.0
+# 0.2.0 (E21/HM4): profile knobs for a non-AWS render (image registry/digest, no IRSA);
+# the local subcharts stay 0.1.0 — their version is a pod-template label on AWS.
+version: 0.2.0
 # appVersion tracks the application release the seeded image tags point at.
 appVersion: "1.0.0"
 

@@ -30,3 +30,20 @@ prod:
   name: letsencrypt-prod
   server: https://acme-v02.api.letsencrypt.org/directory
   privateKeySecretName: letsencrypt-prod-account-key
+
+# E21/HM4 home profile (values-home-server.yaml): a private CA chain instead of ACME.
+# Let's Encrypt HTTP-01 cannot reach the home node's private staging hostnames, and
+# DNS-01 belongs to the HM5 public-route work. Off on AWS. Renders a SelfSigned
+# ClusterIssuer that signs ONE long-lived CA Certificate (in cert-manager's namespace),
+# and a CA ClusterIssuer that signs the Ingress leaf certs from it — so validation can
+# trust one CA file instead of every leaf.
+selfSigned:
+  enabled: false
+  bootstrapName: home-server-selfsigned-bootstrap
+  name: home-server-ca
+  caName: home-server-ca
+  caNamespace: cert-manager
+  caSecretName: home-server-ca
+  caCommonName: driftplain-home-server-ca
+  caDuration: 87600h # 10 years; the leaf certs renew on cert-manager's default cadence
+  caRenewBefore: 8760h

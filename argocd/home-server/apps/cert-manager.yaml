@@ -1,0 +1,71 @@
+# E21/HM4 — cert-manager for the HOME K3s cluster.
+#
+# Same upstream chart and pin as argocd/apps/cert-manager.yaml (v1.20.2; its chart accepts
+# Kubernetes >= 1.22, the home node runs 1.36). At home it signs the Ingress leaf certs from
+# the private CA chain in charts/cluster-issuers (values-home-server.yaml) — no ACME, no
+# public route (HM5). AWS is NOT changed by this file.
+#
+# sync-wave "-1": its CRDs must exist before the cluster-issuers child (wave 1) applies
+# ClusterIssuer/Certificate resources. ServerSideApply: the CRDs exceed the client-side
+# annotation-size limit (same as AWS).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cert-manager
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://charts.jetstack.io
+    chart: cert-manager
+    targetRevision: v1.20.2 # the AWS pin
+    helm:
+      releaseName: cert-manager
+      values: |
+        crds:
+          enabled: true
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi
+        webhook:
+          resources:
+            requests:
+              cpu: 25m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+        cainjector:
+          resources:
+            requests:
+              cpu: 25m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+        startupapicheck:
+          resources:
+            requests:
+              cpu: 25m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: cert-manager
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
