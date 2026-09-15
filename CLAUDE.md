@@ -1,40 +1,30 @@
 # CLAUDE.md — driftplain-gitops
 
-## Claude Code continuation — HM3 private database restore — September 15, 2026
+## Claude Code continuation — HM4 home GitOps and app — September 15, 2026
 
-Read [the HM3 handoff](../docs/session-handoffs/E21-home-hosting/2026-09-15-hm3-backup-restore.md)
-first and [umbrella instructions](../CLAUDE.md). HM2 is complete. HM3 creates an isolated
-one-instance CNPG PostgreSQL 16 restore target; AWS production remains unchanged.
+Read [the HM4 handoff](../docs/session-handoffs/E21-home-hosting/2026-09-15-hm4-home-gitops-app.md)
+first and [umbrella instructions](../CLAUDE.md). HM3 is complete: `argocd/home-server/root.yaml`
+(the home App-of-Apps, argo-cd 9.5.21) reconciles `cnpg-operator` (0.29.0 / 1.30.0) and
+`modelmatch-postgres` with `values-home-server.yaml`; the restored production copy (alembic
+`a4b5c6d7e8f9`) lives in `app` on a Retain PV. AWS production remains unchanged.
 
-**Do not apply the current AWS root/chart unchanged to home.**
-`charts/modelmatch-postgres/values.yaml` currently declares `app/modelmatch-postgres`,
-owner/database `modelmatch`, chat role `modelmatch_chat_ro`, PG image
-`16.10-system-trixie`, two 5Gi PVCs and `modelmatch-gp3`/Delete storage. The storage template
-hardcodes `ebs.csi.aws.com`. Home requires a real separate local-storage profile with
-Retain and node affinity on `/var/lib/rancher/k3s/storage`; size requests are not quotas.
+**Do not apply the AWS umbrella unchanged to home.** HM4 adds, under the same root and only
+through PRs merged to `main`: home children for `sealed-secrets` (chart 2.20.0 / 0.40.0),
+`nginx-ingress` (F5 2.6.0, **ClusterIP** Service, no NLB annotations), `cert-manager` (v1.20.2),
+a home `cluster-issuers` profile with a self-signed issuer (no Let's Encrypt HTTP-01 at home),
+sealed manifests for `app/modelmatch-app-secrets` (exactly `JWT_SECRET`, `POSTGRES_PASSWORD`,
+`CHAT_READONLY_DB_PASSWORD`, `DEMO_SEED_PASSWORD`) and `app/modelmatch-db-app`, and a home
+`modelmatch` umbrella with `charts/modelmatch/values-home-server.yaml`: GHCR images by digest,
+no IRSA annotation, `LLM_CLIENT=fake`, `BLOB_STORE=fake`, private
+`app.home-server.driftplain.dev` / `api.home-server.driftplain.dev` hosts, sslip/branded hosts off,
+limits kept. The AWS default render must stay byte-identical (profile knobs only, chart 0.2.0 pattern).
 
-The current `migrate-job.yaml` is an unconditional PostSync hook, still using image tag
-1.0.22. Runtime FE/BE is 1.0.24. Both seed flags are false. Make restore/migration policy
-explicit before syncing: no automatic upgrade, seed or tag bump against restored data.
-Preserve owner credentials from `modelmatch/app`, basic-auth Secret `modelmatch-db-app`
-and app Secret `modelmatch-app-secrets`; inspect role/ACL/default-privilege restoration.
-Existing operator chart pin is 0.28.3/app 1.29.1; verify compatibility, don't assume latest.
-
-Resolve the critical boundary between **minimal DB-only home GitOps ownership in HM3**
-and HM4's full home root/app deployment. Preserve the GitOps invariant below; prepare the
-smallest proper profile or surface a narrowly justified rehearsal exception. Do not
-silently bypass ArgoCD, reuse the AWS destination or deploy the full application early.
-Namespaces `app` and `home-server-backups` already exist with operator-owned identity
-Secrets; preserve those. No home DB/operator/app deployment is yet present.
-
-**Home root (decided September 15):** `argocd/home-server/root.yaml` is the minimal DB-only
-home App-of-Apps; `argocd/home-server/README.md` holds the bootstrap steps. Its children
-sync from `main`, so home profile changes land only after merge. Tests:
-`../driftplain-backend/.venv/bin/python tests/test_home_server_profile.py`.
-
-GHCR, Sealed Secrets, durable S3 ingestion and Cloudflare full DNS are selected; their
-full runtime integration is HM4/HM5. No public DNS/cutover or scheduled backup/renewal work
-belongs in this slice. See [HM2 acceptance](../driftplain-infra/home-server/HM2-ACCEPTANCE.md).
+Migration policy: the migrate hook stays disabled at home; the 1.0.24 image's alembic head equals
+the restored revision, so no migration runs. Any future schema step against home is an explicit,
+separately reviewed change, never a hook or tag bump. Both seed flags stay false. Tests:
+`../driftplain-backend/.venv/bin/python tests/test_home_server_profile.py` (extend, keep green).
+Existing AWS pins (cnpg 0.28.3, ESO, EBS SC, NLB) are untouched. No public DNS/cutover or
+scheduled backup/renewal work belongs in this slice.
 
 **Current working preference (Steve, September 15):** keep progressing and pause only
 for critical architectural decisions. Plan, use focused tests for new behavior, verify and
