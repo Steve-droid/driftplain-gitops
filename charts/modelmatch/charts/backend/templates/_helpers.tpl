@@ -46,9 +46,18 @@ fail loudly instead of producing a broken ".dkr.ecr..amazonaws.com" host.
 {{- end -}}
 {{- end -}}
 
-{{/* Fully-qualified image ref from the derived registry + per-subchart repo/tag. */}}
+{{/*
+Fully-qualified image ref from the derived registry + per-subchart repo. By TAG by
+default (AWS/ECR, CI bumps `tag`). When `image.digest` is set (E21 home profile: the
+public GHCR copy, immutable), the ref is registry/repo@sha256:… and `tag` is only
+documentation — a digest can never be silently re-pointed by a tag push.
+*/}}
 {{- define "backend.image" -}}
+{{- if .Values.image.digest -}}
+{{- printf "%s/%s@%s" (include "backend.registry" .) .Values.image.repository .Values.image.digest -}}
+{{- else -}}
 {{- printf "%s/%s:%s" (include "backend.registry" .) .Values.image.repository (.Values.image.tag | toString) -}}
+{{- end -}}
 {{- end -}}
 
 {{/*

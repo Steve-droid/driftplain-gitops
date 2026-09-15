@@ -1,0 +1,13 @@
+# values-home-server.yaml — E21/HM4 home-server PROFILE for charts/cluster-issuers.
+#
+# Layered ON TOP of values.yaml (ArgoCD: helm.valueFiles [values.yaml, this]). The home
+# node's ingress is private (ClusterIP, no public route until HM5), so Let's Encrypt
+# HTTP-01 can never validate it: both ACME issuers are OFF here and the private CA chain
+# (templates/selfsigned.yaml) is ON. The umbrella's home profile points
+# ingress.clusterIssuer at `home-server-ca`. Nothing here touches AWS.
+staging:
+  enabled: false
+prod:
+  enabled: false
+selfSigned:
+  enabled: true

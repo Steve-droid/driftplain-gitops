@@ -21,6 +21,11 @@ image:
   repository: modelmatch-frontend
   tag: "1.0.0"
   pullPolicy: IfNotPresent
+  # E21 profile knobs, both empty on AWS: `registry` replaces the derived ECR host
+  # (home: ghcr.io/steve-droid); `digest` ("sha256:…") pins the ref by content instead
+  # of by tag (home: the reviewed GHCR copy of the same release).
+  registry: ""
+  digest: ""
 
 containerPort: 8080   # nginx-unprivileged listens on 8080 as uid 101
 

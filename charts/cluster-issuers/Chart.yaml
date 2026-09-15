@@ -10,7 +10,9 @@
 # annotation. Depends on the cert-manager CRDs (the cert-manager child app, P11).
 apiVersion: v2
 name: cluster-issuers
-description: cert-manager Let's Encrypt ClusterIssuers (HTTP-01) for Driftplain ingress TLS.
+description: >-
+  cert-manager ClusterIssuers for Driftplain ingress TLS: Let's Encrypt (HTTP-01) on AWS;
+  a private self-signed CA chain in the E21 home-server profile (values-home-server.yaml).
 type: application
-version: 0.1.0
+version: 0.2.0
 appVersion: "1.20.2"

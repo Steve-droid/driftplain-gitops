@@ -1,0 +1,71 @@
+# E21/HM4 — F5 NGINX Ingress Controller (OSS) for the HOME K3s cluster.
+#
+# Same chart/pin as argocd/apps/nginx-ingress.yaml (2.6.0, controller 5.5.0) so the
+# umbrella's F5 mergeable-ingress (master/minion) templates and rate-limit annotations
+# render unchanged at home. What differs, and why:
+#   • Service type ClusterIP — the home node runs no cloud controller (K3s servicelb is
+#     disabled, there is no NLB), so no LoadBalancer/NodePort and no AWS annotations. The
+#     controller is reached only from inside the cluster: an SSH port-forward for isolated
+#     validation (HM4), then the Cloudflare Tunnel connector (HM5). Nothing listens on the
+#     LAN or the host network.
+#   • No ignoreDifferences — a ClusterIP Service gets no server-assigned LB fields.
+# K3s also ships no default IngressClass (traefik is disabled), so `nginx` is the one
+# class on home, exactly as on AWS. AWS is NOT changed by this file.
+#
+# sync-wave "0": after cert-manager (-1); the cluster-issuers (1) and the app (2) follow.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: nginx-ingress
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://helm.nginx.com/stable
+    chart: nginx-ingress
+    targetRevision: 2.6.0 # F5 NGINX Ingress Controller OSS 5.5.0 — the AWS pin
+    helm:
+      releaseName: nginx-ingress
+      skipCrds: true # no F5 CRDs (paired with controller.enableCustomResources=false)
+      values: |
+        controller:
+          kind: deployment
+          nginxplus: false
+          replicaCount: 1
+          enableCustomResources: false # standard Kubernetes Ingress only
+          # Same centrally managed snippets as AWS: redirect plain HTTP except the ACME
+          # challenge path (harmless at home — no ACME — and keeps one config to reason about).
+          config:
+            entries:
+              http-snippets: |
+                client_header_timeout 10s;
+                client_body_timeout 10s;
+                map "$scheme:$uri" $modicum_https_redirect {
+                  default 0;
+                  ~^http:/[.]well-known/acme-challenge/ 0;
+                  ~^http: 1;
+                }
+              server-snippets: |
+                if ($modicum_https_redirect) { return 308 https://$host$request_uri; }
+          service:
+            type: ClusterIP # private: port-forward (HM4) / tunnel connector (HM5) only
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: nginx-ingress
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

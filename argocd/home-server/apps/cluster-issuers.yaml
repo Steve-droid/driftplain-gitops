@@ -1,0 +1,34 @@
+# E21/HM4 — cluster-issuers for the HOME K3s cluster: the in-repo chart rendered with the
+# home profile (values-home-server.yaml): both Let's Encrypt ACME issuers OFF (HTTP-01
+# cannot reach a private ClusterIP ingress), the private CA chain ON. The umbrella's home
+# profile names the CA ClusterIssuer (`home-server-ca`) on its Ingress masters.
+#
+# sync-wave "1": after cert-manager's CRDs (-1). The CA Certificate lands in the
+# cert-manager namespace (the destination below); the ClusterIssuers are cluster-scoped.
+# AWS keeps its own child (argocd/apps/cluster-issuers.yaml, values.yaml only).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cluster-issuers
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Steve-droid/driftplain-gitops.git
+    targetRevision: main
+    path: charts/cluster-issuers
+    helm:
+      valueFiles:
+        - values.yaml
+        - values-home-server.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: cert-manager
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
