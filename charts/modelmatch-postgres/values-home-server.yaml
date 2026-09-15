@@ -1,0 +1,52 @@
+# values-home-server.yaml — E21/HM3 home-server PROFILE for charts/modelmatch-postgres.
+#
+# Layered ON TOP of values.yaml (ArgoCD: helm.valueFiles [values.yaml, this]); it
+# overrides only what differs at home. Everything not listed keeps the AWS default,
+# so the DATABASE CONTRACT is unchanged: namespace `app`, Cluster `modelmatch-postgres`
+# (Services modelmatch-postgres-rw/-ro/-r), database/owner `modelmatch`, owner Secret
+# `modelmatch-db-app`, chat role `modelmatch_chat_ro`, PG image 16.10-system-trixie.
+#
+# What differs, and why:
+#   • ONE instance — a single physical host offers no HA; a second instance on the
+#     same disk would only double writes (HM2 host decision).
+#   • Storage: K3s local-path provisioner with reclaimPolicy RETAIN, so deleting the
+#     PVC/Cluster does NOT delete the data directory. The AWS EBS/Delete class is not
+#     provisionable at home. The PV lands under /var/lib/rancher/k3s/storage/ with a
+#     PVC-specific directory + node affinity set by the provisioner; the bound
+#     PV/PVC/path/UID is recorded in infra home-server/HM3 evidence after provisioning.
+#     A PVC size request is NOT a disk quota on local-path — the Samsung filesystem
+#     usage is what must be monitored (HM5).
+#   • No ExternalSecret: home has no ESO/AWS runtime access. The owner Secret is
+#     created by the operator from the age-encrypted HM3 credential bundle (same
+#     original password), and moves to Sealed Secrets in HM4.
+#   • No migrate hook, no seeds: the restored production copy is never migrated,
+#     upgraded, or seeded by a sync. Schema changes against it are explicit HM4 work.
+cluster:
+  instances: 1
+  nodeSelector:
+    kubernetes.io/hostname: driftplain-home
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: "2"
+      memory: 1Gi
+  parameters:
+    shared_buffers: 256MB
+    max_connections: "100"
+storageClass:
+  name: home-server-retain
+  provisioner: rancher.io/local-path
+  parameters: null # null DELETES the inherited {type: gp3}; local-path takes no parameters
+  reclaimPolicy: Retain
+  allowVolumeExpansion: false
+storage:
+  size: 10Gi
+appUserSecret:
+  source: operator
+migrate:
+  enabled: false
+seed:
+  catalog: false
+  demo: false

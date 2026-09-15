@@ -27,6 +27,11 @@ silently bypass ArgoCD, reuse the AWS destination or deploy the full application
 Namespaces `app` and `home-server-backups` already exist with operator-owned identity
 Secrets; preserve those. No home DB/operator/app deployment is yet present.
 
+**Home root (decided September 15):** `argocd/home-server/root.yaml` is the minimal DB-only
+home App-of-Apps; `argocd/home-server/README.md` holds the bootstrap steps. Its children
+sync from `main`, so home profile changes land only after merge. Tests:
+`../driftplain-backend/.venv/bin/python tests/test_home_server_profile.py`.
+
 GHCR, Sealed Secrets, durable S3 ingestion and Cloudflare full DNS are selected; their
 full runtime integration is HM4/HM5. No public DNS/cutover or scheduled backup/renewal work
 belongs in this slice. See [HM2 acceptance](../driftplain-infra/home-server/HM2-ACCEPTANCE.md).

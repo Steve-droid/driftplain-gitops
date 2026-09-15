@@ -1,3 +1,4 @@
+{{- if .Values.migrate.enabled }}
 {{- $img := include "postgres.migrateImage" . -}}
 # Schema migration Job — `alembic upgrade head`, run as an ArgoCD PostSync HOOK.
 #
@@ -110,3 +111,4 @@ spec:
                   key: JWT_SECRET
           resources:
             {{- toYaml .Values.migrate.resources | nindent 12 }}
+{{- end }}

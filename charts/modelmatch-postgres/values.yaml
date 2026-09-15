@@ -57,13 +57,23 @@ cluster:
   parameters:
     shared_buffers: 128MB
     max_connections: "100"
+  # Optional node pinning (empty on AWS: the scheduler spreads across the 2 AZs).
+  # The home profile pins the single instance to the one K3s node.
+  nodeSelector: {}
 # ── Storage: gp3 StorageClass (EBS CSI) + per-instance PVC ────────────────────
 # The default cluster `gp2` StorageClass uses the LEGACY in-tree provisioner
 # (kubernetes.io/aws-ebs), NOT the EBS CSI driver — so we author our own gp3 SC on
 # the CSI provisioner (the persistence requirement is explicitly CSI-backed).
 storageClass:
   name: modelmatch-gp3
-  type: gp3
+  # CSI provisioner + its parameters. The AWS default is the EBS CSI driver with a
+  # gp3 volume type; the home profile (values-home-server.yaml) switches to the K3s
+  # local-path provisioner with no parameters. A values-only name change would NOT
+  # change the provisioner, so it is an explicit knob here.
+  provisioner: ebs.csi.aws.com
+  parameters:
+    type: gp3
+  allowVolumeExpansion: true
   # Delete: no cross-rebuild survival. platform/ is destroyed daily for cost, so a
   # retained volume would be a recurring EBS orphan fighting the FinOps story; the
   # schema is recreated by the migrate hook and demo data is re-seeded each rebuild.
@@ -79,6 +89,11 @@ storage:
 # basic-auth Secret. No new plaintext — one source of truth (AWS Secrets Manager).
 appUserSecret:
   name: modelmatch-db-app
+  # Who creates the basic-auth Secret: `external-secrets` renders the ExternalSecret
+  # below (AWS: ESO <- Secrets Manager). `operator` renders nothing — the Secret must
+  # already exist, created by the operator from the encrypted HM3 credential bundle
+  # (home has no ESO/AWS access; Sealed Secrets ownership is HM4).
+  source: external-secrets
   # The namespaced SecretStore created in P12 (ns app; auth = ESO role-B IRSA).
   secretStoreName: aws-secretsmanager
   # The source JSON secret in AWS Secrets Manager.
@@ -93,6 +108,11 @@ chat:
   # CHAT_READONLY_DB_USER). The role's password is the Secret CHAT_READONLY_DB_PASSWORD.
   readonlyUser: modelmatch_chat_ro
 migrate:
+  # Whether to render the `alembic upgrade head` PostSync hook at all. AWS keeps it
+  # on (existing behaviour). The home restore profile turns it OFF: a restored copy
+  # of production must never be migrated/upgraded implicitly by a sync — any schema
+  # step against restored data is a separately reviewed, explicit change (HM4).
+  enabled: true
   image:
     # The backend image ships migrations/ + alembic.ini; the SAME image runs the
     # schema step (also used for the wait-for-db initContainer — one pull). The seed

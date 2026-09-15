@@ -1,0 +1,43 @@
+# E21/HM3 — CloudNativePG operator for the HOME K3s cluster.
+#
+# Same upstream chart as argocd/apps/cnpg-operator.yaml, different pin: chart 0.29.0
+# ships operator 1.30.0, whose supported Kubernetes range includes the home node's
+# 1.36 (the AWS pin, 1.29.1, only lists 1.36 as "tested" and is EOL 2026-09-29).
+# AWS is NOT changed by this file. Home-only namespace/destination.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cnpg-operator
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://cloudnative-pg.github.io/charts
+    chart: cloudnative-pg
+    targetRevision: 0.29.0 # operator 1.30.0 — supports Kubernetes 1.34–1.36 (checked 2026-09-15)
+    helm:
+      releaseName: cnpg
+      values: |
+        crds:
+          create: true
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 256Mi
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: cnpg-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true

@@ -1,4 +1,8 @@
-# gp3 StorageClass backed by the AWS EBS CSI driver (provisioner ebs.csi.aws.com).
+# The CNPG instances' StorageClass. AWS default: gp3 on the EBS CSI driver
+# (provisioner ebs.csi.aws.com, reclaimPolicy Delete). Home profile
+# (values-home-server.yaml): the K3s local-path provisioner with reclaimPolicy
+# Retain on /var/lib/rancher/k3s/storage (E21/HM3). Provisioner, parameters and
+# expansion are values so a profile switch is explicit, never a name-only change.
 #
 # WHY OUR OWN SC: the cluster's only StorageClass is the default `gp2`, which uses the
 # LEGACY in-tree provisioner `kubernetes.io/aws-ebs` — NOT the CSI driver. The
@@ -22,9 +26,11 @@ metadata:
   annotations:
     # Apply this SC before the Cluster's PVCs are provisioned.
     argocd.argoproj.io/sync-wave: "-1"
-provisioner: ebs.csi.aws.com
+provisioner: {{ .Values.storageClass.provisioner }}
+{{- with .Values.storageClass.parameters }}
 parameters:
-  type: {{ .Values.storageClass.type }}
+  {{- toYaml . | nindent 2 }}
+{{- end }}
 reclaimPolicy: {{ .Values.storageClass.reclaimPolicy }}
 volumeBindingMode: WaitForFirstConsumer
-allowVolumeExpansion: true
+allowVolumeExpansion: {{ .Values.storageClass.allowVolumeExpansion }}
