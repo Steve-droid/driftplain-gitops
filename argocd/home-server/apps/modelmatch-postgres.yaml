@@ -1,0 +1,45 @@
+# E21/HM3 — the restored PRIVATE PostgreSQL 16 on the HOME K3s cluster.
+#
+# Renders charts/modelmatch-postgres with the home profile layered on the shared
+# values: ONE CNPG instance on the `home-server-retain` local-path StorageClass
+# (reclaimPolicy Retain), no ExternalSecret (owner Secret is operator-created from
+# the encrypted HM3 bundle), and NO migrate/seed hooks — a restored production copy
+# is never migrated or seeded by a sync. Namespace `app` pre-exists (HM2).
+#
+# Contract preserved: Cluster/Service names, database/owner `modelmatch`, Secret
+# `modelmatch-db-app`, chat role `modelmatch_chat_ro`, PG image 16.10-system-trixie.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: modelmatch-postgres
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Steve-droid/driftplain-gitops.git
+    targetRevision: main
+    path: charts/modelmatch-postgres
+    helm:
+      valueFiles:
+        - values.yaml
+        - values-home-server.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: app
+  ignoreDifferences:
+    - group: postgresql.cnpg.io
+      kind: Cluster
+      name: modelmatch-postgres
+      namespace: app
+      jsonPointers:
+        - /status
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - RespectIgnoreDifferences=true

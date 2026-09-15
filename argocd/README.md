@@ -11,6 +11,10 @@ The **root `Application`** is created by **Terraform**, in `driftplain-infra/pla
 that makes the rest declarative, so it lives with the installer (infra), **not** in this repo — decided
 2026-06-14 (P10).
 
+> **Home K3s (E21, 2026-09-15):** the home cluster has its own operator-applied root,
+> [`home-server/root.yaml`](home-server/root.yaml), watching `home-server/apps/` — never this
+> directory's `apps/`. See [`home-server/README.md`](home-server/README.md).
+
 The root app is configured to watch this repo:
 
 ```

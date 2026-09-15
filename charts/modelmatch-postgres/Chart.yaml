@@ -4,8 +4,10 @@ description: >-
   In-cluster PostgreSQL 16 for Driftplain — a CloudNativePG `Cluster` (1 primary
   + 1 streaming replica) on an EBS-CSI-backed PVC, plus the Alembic schema
   migration run as a PostSync Job/Helm hook (never on backend startup). P13.
+  E21/HM3 adds an isolated home-server profile (values-home-server.yaml): one
+  instance on Retain local-path storage, no ESO, no migrate/seed hooks.
 type: application
 # Chart version — bumped per chart change (independent of the app's SemVer).
-version: 0.1.0
+version: 0.2.0
 # The PostgreSQL major version this chart deploys (CNPG operand image tag).
 appVersion: "16"

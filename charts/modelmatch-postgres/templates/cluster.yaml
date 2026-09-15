@@ -62,3 +62,8 @@ spec:
     enablePodAntiAffinity: true
     topologyKey: kubernetes.io/hostname
     podAntiAffinityType: preferred
+    {{- with .Values.cluster.nodeSelector }}
+    # Optional explicit node pinning (home profile: the single K3s node).
+    nodeSelector:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
