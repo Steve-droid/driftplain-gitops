@@ -1,0 +1,21 @@
+# E21/HM4 — SealedSecret for app/modelmatch-db-app (strict scope: name + namespace bound).
+# Sealed on the Mac from the original HM3 credential bundle with the home controller's
+# public certificate; only the home Sealed Secrets controller can unseal it. Regenerate
+# with driftplain-infra/home-server/home-server-sealing-keys.py seal. Never edit by hand.
+---
+apiVersion: bitnami.com/v1alpha1
+kind: SealedSecret
+metadata:
+  name: modelmatch-db-app
+  namespace: app
+spec:
+  encryptedData:
+    password: AgAANI0OLX039EpwDv6b3eCvnpZegLUzCufuxGKyMekCvyIBvKx38L8KHgc/vBLx8r3Mqu5Lz19umwSyF60vLOmOJabiLS9T18XBjHsHTmGICCPc2AX6WXFSC7V24VwXDqABdOv5kEKWwyJEKxctSsbqSnxpvQctNGmI95eKHxiFB6RmLi1XTZXP92Hp0GAOU0Lz5n2HN42/k937GTLLY16rpQQYQ8HbPeCkbO2xfuXopxWYezrUNDcF4FzkJ8kbtqBIAki414A1DC/UrbEMIayGBdE5+pLJKIzN1+xSftUSVgZ2fCgslWX2NvxkL02yYkWZKgt3GXajFKQrsRQt6ZuU2bD0DBsM3SCW5gGg9TeudqzBZgLWfELVcvo6vs1uQdIOz6iqVmK+oHK3yAnvu90NsDNSRn7T8sfQx9M52DaTnWOoimM/xuXeLMT/kXV3Sq6iwWQYBxXByh0LqsQHhEcl49qC2/n9ggKd8Cnivks3SgWyF9UbBuNwbMi/Ro3pE2ZaDFUjysnwvqRJXSP8OcJryFhRHK2qgFynhpXB6p7al5WgsAfFIJXgSpyroaAsPnEGym/5hRm52EYFhukxVES35xJ53xNDlqVqI1QyjqmXRKp34dRTXiBGgemUx3O23Z0J0zXvESgv6WPcfFRNh0p8EPGIAgCyJFn+q8EJ3/Zkbayd09AESJmK/j7x2oL6gAEkvc8pBnBV9Cyl4w2Lwly+ZJc6uCv+rtx+U3JqVVytk4C6QmZLKPub5nbq
+    username: AgByDpbNytY/8B5lGncmVMMTb9Y6XhF5tYotIQqxKL3KRD/RcaTp3AcfVQW0SlXVzbHzECrUVWxiABi3gzpv7u5d4XOy1fMP99YGLdgIuCj54FxnDtjZNkEPG1+Hf39anrrQpkM/Q7wV4UpoIkoKYgrGHEt/O+Vr9sjGi/a62q7orRvGwUadpqylKPMw4bLTAuRz5EOms6Jl8zAP79ps9kv29eCKe0ghUo9AyJkfBvb4FIUgUKcXGiLVv6LR3vnlUvZ+9XgX1EQK/5LNojyMZgJ2ZZzWFshENkFgywAuwrVJHwAXjZwnExCl6wisi5WBp1HLKy4BmlAD8EewOHLmJKibMIwnei+YKl/PaQYeMYd/E426/HoLbPvwEY2TwXP9hGSpyUn+mGj4CopN8Z684CppJohfPb21esrtB7lIzjQFQCsy9eqAS7UF7moy9haz+JW2I9CByHMlzxDw+8lvKs3UeFZXU9CCNQzhQ5D8th4H4EvlVprmuGr2PVIMvV9C3N5m7XopNlmOGYRq5U2pcBoWswgm6wvjF0cYvt02kkrP1rZkj4pyYBcVpVWrVWTXzyXd09iTnHbNSLVDT0l0/7MLC/rui7qlVW3iMth8UT8YxNxKLztD9/CUxjlZ9rUk+5GGnrv9f0rgnz145tupw9fl4KGir17sNMyO94zp3j1cDlEvQaEpLnrp+lAsQZfOEZtBMK6+/K5NX6UJ
+  template:
+    metadata:
+      labels:
+        cnpg.io/reload: "true"
+      name: modelmatch-db-app
+      namespace: app
+    type: kubernetes.io/basic-auth

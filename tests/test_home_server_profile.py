@@ -326,6 +326,41 @@ class HomeApplicationTests(unittest.TestCase):
             self.assertLess(wave("app-secrets.yaml"), wave("modelmatch-postgres.yaml"))
 
 
+class HomeSealedManifestTests(unittest.TestCase):
+    """argocd/home-server/sealed: exactly the two app Secrets, sealed (strict scope), no plaintext."""
+
+    SEALED = ROOT / "argocd" / "home-server" / "sealed"
+    EXPECTED = {"modelmatch-app-secrets": ("Opaque", {"JWT_SECRET", "POSTGRES_PASSWORD",
+                                                       "CHAT_READONLY_DB_PASSWORD", "DEMO_SEED_PASSWORD"}, {}),
+                "modelmatch-db-app": ("kubernetes.io/basic-auth", {"username", "password"}, {"cnpg.io/reload": "true"})}
+
+    def setUp(self):
+        self.docs = {p.stem: load(p) for p in self.SEALED.glob("*.yaml")}
+
+    def test_exactly_the_two_sealed_app_secrets(self):
+        self.assertEqual(set(self.docs), set(self.EXPECTED))
+        for name, (kind, keys, labels) in self.EXPECTED.items():
+            doc = self.docs[name]
+            self.assertEqual((doc["apiVersion"], doc["kind"]), ("bitnami.com/v1alpha1", "SealedSecret"))
+            self.assertEqual((doc["metadata"]["name"], doc["metadata"]["namespace"]), (name, "app"))
+            self.assertEqual(set(doc["spec"]["encryptedData"]), keys)
+            template = doc["spec"]["template"]
+            self.assertEqual(template["type"], kind)
+            self.assertEqual((template["metadata"]["name"], template["metadata"]["namespace"]), (name, "app"))
+            self.assertEqual(template["metadata"].get("labels", {}), labels)
+            # strict scope = no cluster-wide / namespace-wide annotation
+            self.assertFalse({k for k in (doc["metadata"].get("annotations") or {}) if "sealedsecrets" in k})
+            for value in doc["spec"]["encryptedData"].values():
+                self.assertRegex(value, r"^Ag[A-Za-z0-9+/=]{200,}$")  # RSA-OAEP session key + AES-GCM payload
+
+    def test_sealed_directory_is_the_app_secrets_child_source(self):
+        app = load(HOME_APPS / "app-secrets.yaml")
+        self.assertEqual(app["spec"]["source"]["path"], "argocd/home-server/sealed")
+        self.assertEqual(app["spec"]["source"]["directory"], {"recurse": False})
+        self.assertEqual(app["spec"]["destination"]["namespace"], "app")
+        self.assertNotIn("CreateNamespace=true", app["spec"].get("syncPolicy", {}).get("syncOptions", []))
+
+
 class HomeRootTests(unittest.TestCase):
     """The home root App-of-Apps watches only the home child directory, from main."""
 
