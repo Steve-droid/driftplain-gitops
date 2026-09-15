@@ -1,5 +1,44 @@
 # CLAUDE.md — driftplain-gitops
 
+## Claude Code continuation — HM3 private database restore — September 15, 2026
+
+Read [the HM3 handoff](../docs/session-handoffs/E21-home-hosting/2026-09-15-hm3-backup-restore.md)
+first and [umbrella instructions](../CLAUDE.md). HM2 is complete. HM3 creates an isolated
+one-instance CNPG PostgreSQL 16 restore target; AWS production remains unchanged.
+
+**Do not apply the current AWS root/chart unchanged to home.**
+`charts/modelmatch-postgres/values.yaml` currently declares `app/modelmatch-postgres`,
+owner/database `modelmatch`, chat role `modelmatch_chat_ro`, PG image
+`16.10-system-trixie`, two 5Gi PVCs and `modelmatch-gp3`/Delete storage. The storage template
+hardcodes `ebs.csi.aws.com`. Home requires a real separate local-storage profile with
+Retain and node affinity on `/var/lib/rancher/k3s/storage`; size requests are not quotas.
+
+The current `migrate-job.yaml` is an unconditional PostSync hook, still using image tag
+1.0.22. Runtime FE/BE is 1.0.24. Both seed flags are false. Make restore/migration policy
+explicit before syncing: no automatic upgrade, seed or tag bump against restored data.
+Preserve owner credentials from `modelmatch/app`, basic-auth Secret `modelmatch-db-app`
+and app Secret `modelmatch-app-secrets`; inspect role/ACL/default-privilege restoration.
+Existing operator chart pin is 0.28.3/app 1.29.1; verify compatibility, don't assume latest.
+
+Resolve the critical boundary between **minimal DB-only home GitOps ownership in HM3**
+and HM4's full home root/app deployment. Preserve the GitOps invariant below; prepare the
+smallest proper profile or surface a narrowly justified rehearsal exception. Do not
+silently bypass ArgoCD, reuse the AWS destination or deploy the full application early.
+Namespaces `app` and `home-server-backups` already exist with operator-owned identity
+Secrets; preserve those. No home DB/operator/app deployment is yet present.
+
+GHCR, Sealed Secrets, durable S3 ingestion and Cloudflare full DNS are selected; their
+full runtime integration is HM4/HM5. No public DNS/cutover or scheduled backup/renewal work
+belongs in this slice. See [HM2 acceptance](../driftplain-infra/home-server/HM2-ACCEPTANCE.md).
+
+**Current working preference (Steve, September 15):** keep progressing and pause only
+for critical architectural decisions. Plan, use focused tests for new behavior, verify and
+self-review before routine commits/PRs; do not reintroduce the generic approval loops or
+full-suite repetition below for unchanged work. This supersedes those older instructions
+for this continuation. No paid LLM calls, public cutover, production teardown or destructive
+source changes without explicit scope. No subagents/review agents, unsolicited diagrams
+or additional tasks. Keep answers concise.
+
 > **P38r (September 12, 2026):** Driftplain DNS and trusted app/API HTTPS are verified; the existing Google client has the new origin, verified ownership and published branding. `runtimeHostSet=driftplain` selects api.driftplain.dev while retaining Modicum and sslip.io.
 
 > Driftplain was previously Modicum / ModelMatch. The four public repositories use `driftplain-*`; existing infrastructure, images, database names, metrics and CI credential/environment identifiers retain `modelmatch` for compatibility.
