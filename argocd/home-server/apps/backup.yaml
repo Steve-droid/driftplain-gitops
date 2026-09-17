@@ -1,0 +1,34 @@
+# E21/HM5 — the in-cluster hourly backup CronJob (charts/home-server-backup), GATED.
+#
+# The durable replacement for the Mac interim schedule (driftplain-infra home-server/
+# home-server-backup-schedule.py): pg_dump over the cluster network as the owner role, age
+# encryption in a pipe, single PUTs with the write-only Roles Anywhere backup leaf
+# (home-server-backups/home-server-backup-identity; PutObject on postgres/hourly/,
+# postgres/daily/, recovery/ only). It stays SUSPENDED (values: enabled=false) until:
+#   1. Roles Anywhere sessions are enabled (identity root, separate approval);
+#   2. the helper image is built and published by digest (driftplain-infra home-server/
+#      backup-image, pinned aws_signing_helper 1.8.5);
+#   3. the owner credential is sealed for this namespace (home-server-backup-db-owner).
+# The namespace pre-exists (HM2 identity bootstrap). sync-wave "2".
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: backup
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Steve-droid/driftplain-gitops.git
+    targetRevision: main
+    path: charts/home-server-backup
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: home-server-backups
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

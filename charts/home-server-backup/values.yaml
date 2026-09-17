@@ -1,0 +1,33 @@
+# charts/home-server-backup — home-only (no AWS profile). GATED: enabled=false renders the
+# CronJob suspended. Enabling requires ALL of: Roles Anywhere sessions on (identity root),
+# image.digest of the published helper image, and the sealed owner credential Secret.
+enabled: false
+schedule: "23 * * * *" # hourly; the run in dailyHourUtc lands under postgres/daily/
+dailyHourUtc: "01"
+image:
+  # Built from driftplain-infra home-server/backup-image (postgresql-client 16, age, aws cli,
+  # aws_signing_helper 1.8.5 pinned by SHA-256). Never :latest; digest required when enabled.
+  repository: ghcr.io/steve-droid/home-server-backup
+  digest: ""
+  uid: 10001
+  gid: 10001
+identity:
+  secretName: home-server-backup-identity # kubernetes.io/tls leaf bootstrapped in HM2 (tls.crt/tls.key)
+  region: ap-south-1
+  trustAnchorArn: arn:aws:rolesanywhere:ap-south-1:957261948820:trust-anchor/913f6b1b-d09a-41be-8715-e41e04ecda90
+  profileArn: arn:aws:rolesanywhere:ap-south-1:957261948820:profile/f3ec8cc6-34eb-4464-b962-4e38c09848ef
+  roleArn: arn:aws:iam::957261948820:role/modelmatch-home-server-backup
+database:
+  host: modelmatch-postgres-rw.app.svc
+  port: "5432"
+  name: modelmatch
+  # A strict-scope sealed copy of app/modelmatch-db-app for THIS namespace (username/password);
+  # not yet sealed — the CronJob cannot mount a Secret from `app`.
+  secretName: home-server-backup-db-owner
+bucket: modelmatch-home-server-backups-957261948820
+recipient: age1vcy5ynjmhrv587m5e8pvgm42gwrwxj4smzzcywhxckrl47xqea8qcewa7m # recovery-key-v1 public recipient
+resources:
+  requests: { cpu: 50m, memory: 64Mi }
+  limits: { cpu: 500m, memory: 256Mi }
+workSizeLimit: 1Gi
+activeDeadlineSeconds: 900

@@ -1,0 +1,244 @@
+# E21/HM5 — kube-prometheus-stack on the HOME K3s cluster: bounded monitoring.
+#
+# Same chart and pin as argocd/apps/monitoring.yaml (85.2.2, operator v0.90.1) with the same
+# trim: no Alertmanager, no logging stack, every container capped, emptyDir + short retention
+# (monitoring data is rebuildable; nothing to back up). What differs at home, and why:
+#   • K3s embeds the scheduler/controller-manager/kube-proxy on localhost and runs no etcd
+#     endpoint, so those scrapers and their default rule groups stay off (they would sit DOWN).
+#   • Alerts are evaluated by Prometheus itself and read by the heartbeat CronJob
+#     (charts/home-server-heartbeat): the external monitor is pinged only while NO critical
+#     alert fires, so a firing alert surfaces as a missed heartbeat — no SMTP, no Alertmanager.
+#   • Home-specific rules (additionalPrometheusRulesMap): root disk 70 % warning / 85 % critical
+#     (a local-path PVC size is not a quota — the filesystem is what fills), certificate expiry
+#     (cert-manager metrics), the CNPG instance, the app/ingress Deployments, ArgoCD sync/health,
+#     node readiness and memory pressure.
+#   • Extra scrapes: the backend /metrics (ServiceMonitor), the ArgoCD controller and the
+#     cert-manager controller (PodMonitors); CNPG publishes its own PodMonitor
+#     (charts/modelmatch-postgres values-home-server: monitoring.enablePodMonitor).
+# Grafana is port-forward only (no Ingress, no public route). AWS is NOT changed by this file.
+#
+# sync-wave "1": after the platform children; the dashboards and heartbeat children are wave 2.
+# ServerSideApply: the operator CRDs exceed the client-side annotation-size limit (as on AWS).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: monitoring
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://prometheus-community.github.io/helm-charts
+    chart: kube-prometheus-stack
+    targetRevision: 85.2.2 # the AWS pin (operator v0.90.1)
+    helm:
+      releaseName: kube-prometheus-stack
+      values: |
+        alertmanager:
+          enabled: false        # alerts reach the outside as a withheld heartbeat, not via Alertmanager
+        windowsMonitoring:
+          enabled: false
+        # K3s: these run inside the k3s server process on localhost — not scrapeable, no endpoint.
+        kubeControllerManager: { enabled: false }
+        kubeScheduler:          { enabled: false }
+        kubeEtcd:               { enabled: false }
+        kubeProxy:              { enabled: false }
+
+        defaultRules:
+          create: true
+          rules:
+            alertmanager: false
+            etcd: false
+            kubeProxy: false
+            kubeControllerManager: false
+            kubeSchedulerAlerting: false
+            kubeSchedulerRecording: false
+            windows: false
+
+        prometheusOperator:
+          resources:
+            requests: { cpu: 50m,  memory: 128Mi }
+            limits:   { cpu: 200m, memory: 256Mi }
+          # No admission webhook and no webhook TLS (the PreSync cert-gen Jobs wedged the AWS
+          # sync; without the webhook the operator needs no serving cert) — same as AWS.
+          admissionWebhooks:
+            enabled: false
+          tls:
+            enabled: false
+          prometheusConfigReloader:
+            resources:
+              requests: { cpu: 10m, memory: 16Mi }
+              limits:   { cpu: 50m, memory: 32Mi }
+
+        prometheus:
+          prometheusSpec:
+            # Discover our ServiceMonitors/PodMonitors/Rules regardless of a Helm release label.
+            serviceMonitorSelectorNilUsesHelmValues: false
+            podMonitorSelectorNilUsesHelmValues: false
+            probeSelectorNilUsesHelmValues: false
+            ruleSelectorNilUsesHelmValues: false
+            retention: 2d
+            retentionSize: 1GiB   # emptyDir on the single node: bound the TSDB, never the root disk
+            resources:
+              requests: { cpu: 100m, memory: 512Mi }
+              limits:   { cpu: 500m, memory: 1Gi }
+          additionalServiceMonitors:
+            - name: modelmatch-backend
+              namespaceSelector:
+                matchNames: [app]
+              selector:
+                matchLabels:
+                  app.kubernetes.io/name: backend
+                  app.kubernetes.io/instance: modelmatch
+              endpoints:
+                - port: http
+                  path: /metrics
+                  interval: 30s
+          additionalPodMonitors:
+            - name: argocd-application-controller
+              namespaceSelector:
+                matchNames: [argocd]
+              selector:
+                matchLabels:
+                  app.kubernetes.io/name: argocd-application-controller
+              podMetricsEndpoints:
+                - port: metrics
+                  path: /metrics
+                  interval: 30s
+            # cert-manager controller: certmanager_certificate_expiration_timestamp_seconds feeds
+            # the expiry rules below (the chart's own ServiceMonitor stays off — no extra Service).
+            - name: cert-manager
+              namespaceSelector:
+                matchNames: [cert-manager]
+              selector:
+                matchLabels:
+                  app.kubernetes.io/name: cert-manager
+                  app.kubernetes.io/component: controller
+              podMetricsEndpoints:
+                - port: http-metrics
+                  path: /metrics
+                  interval: 60s
+
+        additionalPrometheusRulesMap:
+          home-server:
+            groups:
+              - name: home-server.rules
+                rules:
+                  - alert: HomeServerRootDiskFilling
+                    expr: >-
+                      (1 - node_filesystem_avail_bytes{mountpoint="/",fstype!~"tmpfs|overlay"}
+                        / node_filesystem_size_bytes{mountpoint="/",fstype!~"tmpfs|overlay"}) * 100 > 70
+                    for: 15m
+                    labels: { severity: warning }
+                    annotations:
+                      summary: "Home root filesystem above 70 %"
+                      description: "The local-path PVCs and container images share the root disk; review growth."
+                  - alert: HomeServerRootDiskCritical
+                    expr: >-
+                      (1 - node_filesystem_avail_bytes{mountpoint="/",fstype!~"tmpfs|overlay"}
+                        / node_filesystem_size_bytes{mountpoint="/",fstype!~"tmpfs|overlay"}) * 100 > 85
+                    for: 5m
+                    labels: { severity: critical }
+                    annotations:
+                      summary: "Home root filesystem above 85 %"
+                      description: "PostgreSQL writes fail when the disk is full; free space now."
+                  - alert: HomeServerCertificateExpiringSoon
+                    expr: certmanager_certificate_expiration_timestamp_seconds - time() < 14 * 24 * 3600
+                    for: 1h
+                    labels: { severity: warning }
+                    annotations:
+                      summary: "A cert-manager certificate expires within 14 days"
+                      description: "cert-manager renews at two thirds of the lifetime; a stuck renewal shows here first."
+                  - alert: HomeServerCertificateExpiryCritical
+                    expr: certmanager_certificate_expiration_timestamp_seconds - time() < 3 * 24 * 3600
+                    for: 10m
+                    labels: { severity: critical }
+                    annotations:
+                      summary: "A cert-manager certificate expires within 3 days"
+                      description: "Renewal is failing; inspect the Certificate and the private issuer chain."
+                  - alert: HomeServerDatabaseNotReady
+                    expr: absent(cnpg_collector_up{namespace="app"}) or cnpg_collector_up{namespace="app"} != 1
+                    for: 5m
+                    labels: { severity: critical }
+                    annotations:
+                      summary: "The home PostgreSQL instance is not reporting"
+                      description: "modelmatch-postgres is down or its metrics endpoint is unreachable."
+                  - alert: HomeServerAppUnavailable
+                    expr: kube_deployment_status_replicas_available{namespace="app",deployment=~"modelmatch-(backend|frontend)"} < 1
+                    for: 5m
+                    labels: { severity: critical }
+                    annotations:
+                      summary: "A Driftplain Deployment has no available replica"
+                      description: "{{ $labels.deployment }} serves nothing; check pods and the database."
+                  - alert: HomeServerIngressUnavailable
+                    expr: kube_deployment_status_replicas_available{namespace="nginx-ingress",deployment="nginx-ingress-controller"} < 1
+                    for: 5m
+                    labels: { severity: critical }
+                    annotations:
+                      summary: "The ingress controller has no available replica"
+                      description: "Nothing routes to the app; the tunnel origin is down."
+                  - alert: HomeServerArgoCDNotHealthy
+                    expr: argocd_app_info{health_status!="Healthy"} == 1 or argocd_app_info{sync_status!="Synced"} == 1
+                    for: 30m
+                    labels: { severity: warning }
+                    annotations:
+                      summary: "An ArgoCD Application is not Synced/Healthy for 30 minutes"
+                      description: "{{ $labels.name }}: {{ $labels.sync_status }} / {{ $labels.health_status }}."
+                  - alert: HomeServerNodeNotReady
+                    expr: kube_node_status_condition{condition="Ready",status="true"} == 0
+                    for: 5m
+                    labels: { severity: critical }
+                    annotations:
+                      summary: "The home node is not Ready"
+                      description: "K3s reports the node NotReady; workloads are not scheduled."
+                  - alert: HomeServerMemoryPressure
+                    expr: node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes < 0.10
+                    for: 10m
+                    labels: { severity: warning }
+                    annotations:
+                      summary: "Less than 10 % memory available on the home node"
+                      description: "Review limits before the kernel starts evicting."
+
+        grafana:
+          # No admin password in git (chart default, read live for a port-forward); no Ingress.
+          persistence:
+            enabled: false
+          resources:
+            requests: { cpu: 50m,  memory: 256Mi }
+            limits:   { cpu: 200m, memory: 512Mi }
+          sidecar:
+            resources:
+              requests: { cpu: 10m, memory: 64Mi }
+              limits:   { cpu: 50m, memory: 128Mi }
+
+        kube-state-metrics:
+          resources:
+            requests: { cpu: 25m,  memory: 64Mi }
+            limits:   { cpu: 100m, memory: 128Mi }
+
+        prometheus-node-exporter:
+          resources:
+            requests: { cpu: 25m,  memory: 32Mi }
+            limits:   { cpu: 100m, memory: 64Mi }
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  # The Grafana chart generates a random admin password on every render; ignore the Secret's
+  # data so the first generated value stays and the app is not permanently OutOfSync (as on AWS).
+  ignoreDifferences:
+    - group: ""
+      kind: Secret
+      name: kube-prometheus-stack-grafana
+      namespace: monitoring
+      jsonPointers:
+        - /data
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true

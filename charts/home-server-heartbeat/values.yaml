@@ -1,0 +1,23 @@
+# charts/home-server-heartbeat — home-only (no AWS profile).
+#
+# enabled: false keeps the CronJob suspended. Turn it on together with sealed.encryptedUrl,
+# the heartbeat URL sealed (strict scope) for monitoring/home-server-heartbeat by
+# driftplain-infra home-server/home-server-sealing-keys.py. The URL is a bearer-like token:
+# never in plain values, never in logs (the script prints outcomes, never the URL).
+enabled: false
+schedule: "*/5 * * * *"
+image:
+  repository: curlimages/curl
+  digest: sha256:463eaf6072688fe96ac64fa623fe73e1dbe25d8ad6c34404a669ad3ce1f104b6 # 8.16.0
+  # curlimages/curl runs as the unprivileged `curl_user` (uid 100, gid 101).
+  uid: 100
+  gid: 101
+prometheusUrl: http://kube-prometheus-stack-prometheus.monitoring.svc:9090
+secret:
+  name: home-server-heartbeat
+  key: url
+sealed:
+  encryptedUrl: "" # SealedSecret encryptedData.url; empty = no Secret rendered (CronJob stays suspended)
+resources:
+  requests: { cpu: 10m, memory: 16Mi }
+  limits: { cpu: 50m, memory: 32Mi }

@@ -1,0 +1,12 @@
+# The heartbeat script, shipped from scripts/heartbeat.sh so tests run the same file.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: home-server-heartbeat
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: home-server-heartbeat
+    app.kubernetes.io/part-of: driftplain-home-server
+data:
+  heartbeat.sh: |-
+{{ .Files.Get "scripts/heartbeat.sh" | indent 4 }}

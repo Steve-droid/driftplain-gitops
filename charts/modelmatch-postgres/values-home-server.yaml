@@ -21,6 +21,8 @@
 #     original password), and moves to Sealed Secrets in HM4.
 #   • No migrate hook, no seeds: the restored production copy is never migrated,
 #     upgraded, or seeded by a sync. Schema changes against it are explicit HM4 work.
+#   • HM5: the CNPG PodMonitor is on — the home kube-prometheus-stack scrapes the
+#     instance (cnpg_collector_up feeds the HomeServerDatabaseNotReady rule).
 cluster:
   instances: 1
   nodeSelector:
@@ -35,6 +37,8 @@ cluster:
   parameters:
     shared_buffers: 256MB
     max_connections: "100"
+  monitoring:
+    enablePodMonitor: true
 storageClass:
   name: home-server-retain
   provisioner: rancher.io/local-path

@@ -1,0 +1,8 @@
+apiVersion: v2
+name: home-server-heartbeat
+description: >-
+  E21/HM5 — pings the external availability monitor's heartbeat URL only while the home
+  Prometheus reports no firing critical alert. Suspended until the URL is sealed.
+type: application
+version: 0.1.0
+appVersion: "1.0.0"

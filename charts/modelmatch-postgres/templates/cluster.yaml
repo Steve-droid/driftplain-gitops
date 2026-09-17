@@ -44,6 +44,12 @@ spec:
       shared_buffers: {{ .Values.cluster.parameters.shared_buffers | quote }}
       max_connections: {{ .Values.cluster.parameters.max_connections | quote }}
 
+  {{- if .Values.cluster.monitoring.enablePodMonitor }}
+  # Operator-managed PodMonitor (needs the monitoring.coreos.com CRDs — home HM5).
+  monitoring:
+    enablePodMonitor: true
+  {{- end }}
+
   storage:
     storageClass: {{ .Values.storageClass.name }}
     size: {{ .Values.storage.size }}

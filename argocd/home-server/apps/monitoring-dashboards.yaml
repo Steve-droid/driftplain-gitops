@@ -1,0 +1,30 @@
+# E21/HM5 — the same in-repo Grafana dashboards (charts/monitoring) on the HOME cluster.
+#
+# Plain labelled ConfigMaps (grafana_dashboard=1) that the kube-prometheus-stack Grafana sidecar
+# imports; identical chart and dashboards to argocd/apps/monitoring-dashboards.yaml, so the
+# home Grafana shows the app/infra/LLM panels off the same metric names. No CRD dependency.
+# sync-wave "2": after the monitoring child (1). AWS is NOT changed by this file.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: monitoring-dashboards
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Steve-droid/driftplain-gitops.git
+    targetRevision: main
+    path: charts/monitoring
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
