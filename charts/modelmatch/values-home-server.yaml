@@ -12,9 +12,12 @@
 #     holds NO AWS identity (the Roles Anywhere mount is a separate HM5 approval).
 #   • Isolated validation: LLM_CLIENT=fake and BLOB_STORE=fake — no Bedrock call, no S3 write.
 #     Production never sees these values; they exist only in this profile.
-#   • Hosts: private staging names that are NOT in public DNS, resolved only by the operator
-#     (curl --connect-to / an SSH port-forward). sslip.io and the branded/driftplain host sets
-#     are off; the F5 ingress masters name the private CA issuer `home-server-ca`.
+#   • Hosts: the branded pair is private (app/api.home-server.driftplain.dev, not in public
+#     DNS; the tunnel dials the ingress with that SNI and Host header). The `staging` host set
+#     (HM5) is the public pair behind Cloudflare: it selects the runtime API URL the frontend
+#     calls and the CORS origin the backend accepts. Its ingress objects render like any host
+#     set but never receive traffic. sslip.io and the driftplain runtime set stay off; the F5
+#     ingress masters name the private CA issuer `home-server-ca`.
 #   • Agent images in the generated Jenkins snippets point at the public GHCR copies.
 global:
   sslipIp: "0.0.0.0" # sentinel; retainSslipHosts=false renders no sslip host
@@ -22,10 +25,14 @@ global:
   apiHost: "api.home-server.driftplain.dev"
   useCustomHosts: true
   retainSslipHosts: false
-  runtimeHostSet: ""
+  runtimeHostSet: "staging"
   additionalHosts:
     driftplain:
       enabled: false
+    staging:
+      enabled: true
+      appHost: "staging.driftplain.dev"
+      apiHost: "api-staging.driftplain.dev"
 ingress:
   clusterIssuer: home-server-ca
 backend:

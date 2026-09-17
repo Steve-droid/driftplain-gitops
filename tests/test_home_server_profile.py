@@ -22,6 +22,8 @@ GHCR = "ghcr.io/steve-droid"
 DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
 HOME_APP_HOST = "app.home-server.driftplain.dev"
 HOME_API_HOST = "api.home-server.driftplain.dev"
+STAGING_APP_HOST = "staging.driftplain.dev"
+STAGING_API_HOST = "api-staging.driftplain.dev"
 AWS_ONLY = ("dkr.ecr", "eks.amazonaws.com/role-arn", "ebs.csi", "external-secrets.io",
             "aws-load-balancer", "sslip.io", "letsencrypt", "modicum.cloud", "driftplain.dev\"")
 
@@ -202,8 +204,8 @@ class HomeUmbrellaProfileTests(unittest.TestCase):
         config = self.docs["ConfigMap", "modelmatch-backend-config"]["data"]
         self.assertEqual(config["LLM_CLIENT"], "fake")
         self.assertEqual(config["BLOB_STORE"], "fake")
-        self.assertEqual(config["PUBLIC_BASE_URL"], f"https://{HOME_API_HOST}")
-        self.assertEqual(config["CORS_ALLOW_ORIGINS"], f"https://{HOME_APP_HOST}")
+        self.assertEqual(config["PUBLIC_BASE_URL"], f"https://{STAGING_API_HOST}")
+        self.assertEqual(config["CORS_ALLOW_ORIGINS"], f"https://{HOME_APP_HOST},https://{STAGING_APP_HOST}")
         self.assertEqual(config["DATABASE_URL"],
                          "postgresql+psycopg://modelmatch@modelmatch-postgres-rw:5432/modelmatch")
         self.assertEqual(config["CHAT_READONLY_DB_USER"], "modelmatch_chat_ro")
@@ -212,16 +214,20 @@ class HomeUmbrellaProfileTests(unittest.TestCase):
             self.assertTrue(registry_repo.startswith(GHCR + "/modelmatch-agent"), config[key])
             self.assertRegex(digest, DIGEST)
         frontend = self.docs["ConfigMap", "modelmatch-frontend-config"]["data"]
-        self.assertEqual(frontend["API_BASE_URL"], f"https://{HOME_API_HOST}")
+        self.assertEqual(frontend["API_BASE_URL"], f"https://{STAGING_API_HOST}")
 
     def test_private_hosts_only_with_the_home_ca_issuer(self):
         ingresses = {name: obj for (kind, name), obj in self.docs.items() if kind == "Ingress"}
         self.assertEqual(set(ingresses), {"modelmatch-app-branded", "modelmatch-app-branded-routes",
                                           "modelmatch-api-branded", "modelmatch-api-branded-routes",
-                                          "modelmatch-api-branded-auth"})
+                                          "modelmatch-api-branded-auth",
+                                          "modelmatch-app-staging", "modelmatch-app-staging-routes",
+                                          "modelmatch-api-staging", "modelmatch-api-staging-routes",
+                                          "modelmatch-api-staging-auth"})
         hosts = {rule["host"] for obj in ingresses.values() for rule in obj["spec"]["rules"]}
-        self.assertEqual(hosts, {HOME_APP_HOST, HOME_API_HOST})
-        for master in ("modelmatch-app-branded", "modelmatch-api-branded"):
+        self.assertEqual(hosts, {HOME_APP_HOST, HOME_API_HOST, STAGING_APP_HOST, STAGING_API_HOST})
+        for master in ("modelmatch-app-branded", "modelmatch-api-branded",
+                       "modelmatch-app-staging", "modelmatch-api-staging"):
             annotations = ingresses[master]["metadata"]["annotations"]
             self.assertEqual(annotations["cert-manager.io/cluster-issuer"], "home-server-ca")
             self.assertEqual(ingresses[master]["spec"]["ingressClassName"], "nginx")
