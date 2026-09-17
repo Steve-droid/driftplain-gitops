@@ -13,6 +13,8 @@ source path is `argocd/apps`, not this directory.
 | `apps/sealed-secrets.yaml` | Sealed Secrets controller (chart 2.20.0 / 0.40.0, ns `sealed-secrets`, wave -2): unseals the committed SealedSecret manifests; its sealing keys are backed up age-encrypted off-machine (infra `home-server/HM4-HOME-APP.md`). Home has no ESO. | HM4 |
 | `apps/cert-manager.yaml` | cert-manager v1.20.2 (the AWS pin), wave -1. Signs the Ingress leaf certs from the private CA below; no ACME at home. | HM4 |
 | `apps/nginx-ingress.yaml` | F5 NGINX Ingress Controller 2.6.0 (the AWS pin) with a **ClusterIP** Service, wave 0: no LoadBalancer/NLB/NodePort — reached by SSH port-forward (HM4) and the tunnel connector (HM5). | HM4 |
+| `apps/app-secrets.yaml` | Directory source `sealed/` (wave 0): the two SealedSecret manifests for the app credentials, generated from the original HM3 bundle in strict scope; the controller adopted the pre-existing owner Secret unchanged. | HM4 |
+| `apps/modelmatch.yaml` | The same umbrella as AWS with `charts/modelmatch/values-home-server.yaml` (wave 2): the 1.0.24 images by digest from public GHCR, no IRSA, `LLM_CLIENT=fake` / `BLOB_STORE=fake`, private `*.home-server.driftplain.dev` hosts on the `home-server-ca` issuer. No migrate/seed. | HM4 |
 | `apps/cluster-issuers.yaml` | The in-repo cluster-issuers chart with `values-home-server.yaml`, wave 1: Let's Encrypt off, a self-signed bootstrap → CA Certificate → `home-server-ca` ClusterIssuer chain on. | HM4 |
 
 **HM3 was DB-only; HM4 adds the platform children above first, then the sealed app

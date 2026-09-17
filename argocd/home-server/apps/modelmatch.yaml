@@ -1,0 +1,39 @@
+# E21/HM4 — the Driftplain product umbrella (frontend + backend + Ingress) on the HOME cluster.
+#
+# The same in-repo charts/modelmatch umbrella as AWS (argocd/apps/modelmatch.yaml), rendered
+# with the home profile layered on the shared values: the SAME 1.0.24 release images pinned by
+# content digest from their public GHCR copies (digest == the ECR source digest; copied, not
+# rebuilt), no IRSA annotation (no EKS webhook; the pod holds no AWS identity), LLM_CLIENT=fake
+# and BLOB_STORE=fake for isolated validation, private *.home-server.driftplain.dev hosts that
+# never enter public DNS, and the private CA issuer on the F5 ingress masters. Everything else
+# (Secret name/keys, DATABASE_URL to modelmatch-postgres-rw, limits, rate limits) is unchanged.
+#
+# sync-wave "2": after app-secrets (0) and modelmatch-postgres (1). The restored database is at
+# the 1.0.24 image's alembic head, so there is NO migrate hook and no seed — a sync never
+# changes the data. NO CreateNamespace: `app` pre-exists (HM2). AWS is NOT changed by this file.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: modelmatch
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Steve-droid/driftplain-gitops.git
+    targetRevision: main
+    path: charts/modelmatch
+    helm:
+      valueFiles:
+        - values.yaml
+        - values-home-server.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: app
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
