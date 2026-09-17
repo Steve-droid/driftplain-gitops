@@ -24,13 +24,14 @@ OutOfSync (the all-default `directory.recurse=false` on `app-secrets`). Tests:
 `../driftplain-backend/.venv/bin/python tests/test_home_server_profile.py` (extend, keep green;
 AWS renders unchanged). Migration policy, seed flags and the existing AWS pins are untouched.
 
-**HM5 status (September 17, evening; v0.23.0):** the `monitoring`, `monitoring-dashboards`,
-`heartbeat` (suspended until the URL is sealed), `backup` (suspended until image digest + sealed
-owner credentials + sessions) and `cloudflared` (0 replicas until the token is sealed) children
-are merged and `Synced Healthy` under `home-server-root`; the root OutOfSync is fixed. Remaining
-gitops work after Steve's approvals: seal the heartbeat URL and tunnel token, pin the backup image
-digest, add a `staging` host set in the umbrella home profile so the staging frontend calls
-`api-staging.driftplain.dev`. Tests: `tests/test_home_server_profile.py` (50). Next tag v0.24.0.
+**HM5 status (September 18; v0.28.0):** the `monitoring`, `monitoring-dashboards`, `heartbeat`
+(suspended until the URL is sealed), `backup` (CronJob enabled with the pinned image digest and the
+sealed owner credential; the pod stays in `ErrImagePull` until the GHCR package is public) and
+`cloudflared` (one replica with the sealed tunnel token; four tunnel connections, ServiceMonitor
+scraped) children are `Synced Healthy` under `home-server-root`. Remaining gitops work after
+Steve's approvals: seal the heartbeat URL, and add a `staging` host set in the umbrella home
+profile so the staging frontend calls `api-staging.driftplain.dev` (after delegation).
+Tests: `tests/test_home_server_profile.py` (52). Next tag v0.29.0.
 
 **Current working preference (Steve, September 15):** keep progressing and pause only
 for critical architectural decisions. Plan, use focused tests for new behavior, verify and
