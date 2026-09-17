@@ -1,0 +1,15 @@
+# The public certificate of the GitOps-owned home CA (cluster-issuers → cert-manager/home-server-ca).
+# cloudflared verifies the F5 ingress certificate against this pool with the private staging SNI
+# (the tunnel's originRequest.caPool / originServerName, owned by driftplain-infra/cloudflare).
+# Public key material only; rotate here when the CA is ever re-issued.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: home-server-cloudflared-ca
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: home-server-cloudflared
+    app.kubernetes.io/part-of: driftplain-home-server
+data:
+  {{ base .Values.origin.caPoolPath }}: |
+    {{- .Values.origin.caCertificate | nindent 4 }}

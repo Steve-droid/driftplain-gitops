@@ -1,0 +1,67 @@
+# Connector metrics for the home Prometheus (kube-prometheus-stack selects every ServiceMonitor
+# and PrometheusRule: *SelectorNilUsesHelmValues=false). Rendered only while enabled so a
+# suspended connector raises no alert.
+apiVersion: v1
+kind: Service
+metadata:
+  name: home-server-cloudflared
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: home-server-cloudflared
+    app.kubernetes.io/part-of: driftplain-home-server
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: home-server-cloudflared
+  ports:
+    - name: metrics
+      port: {{ .Values.metrics.port }}
+      targetPort: metrics
+      protocol: TCP
+{{- if and .Values.enabled .Values.metrics.serviceMonitor }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: home-server-cloudflared
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: home-server-cloudflared
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: home-server-cloudflared
+  endpoints:
+    - port: metrics
+      interval: 60s
+{{- end }}
+{{- if and .Values.enabled .Values.metrics.rules }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: home-server-cloudflared
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: home-server-cloudflared
+spec:
+  groups:
+    - name: home-server-cloudflared.rules
+      rules:
+        # cloudflared keeps four HA connections to the edge. Zero for five minutes = the public
+        # staging path is down (withholds the cluster heartbeat via the critical-alert query).
+        - alert: HomeServerTunnelDisconnected
+          expr: (sum(cloudflared_tunnel_ha_connections) or vector(0)) == 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "No Cloudflare Tunnel connection from the home cluster for 5 minutes"
+        - alert: HomeServerTunnelDegraded
+          expr: sum(cloudflared_tunnel_ha_connections) < 2
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Fewer than two Cloudflare Tunnel HA connections for 15 minutes"
+{{- end }}
