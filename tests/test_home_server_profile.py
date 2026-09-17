@@ -631,7 +631,7 @@ class HomeBackupChartTests(unittest.TestCase):
         self.assertNotIn("recovery/", script.split("prefix=")[1])  # never writes the recovery prefix
 
     def test_enabling_requires_a_pinned_image_digest(self):
-        result = subprocess.run(["helm", "template", "backup", str(BACKUP), "--set", "enabled=true"],
+        result = subprocess.run(["helm", "template", "backup", str(BACKUP), "--set", "enabled=true", "--set", "image.digest="],
                                 cwd=ROOT, text=True, capture_output=True)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("image.digest is required", result.stderr)
