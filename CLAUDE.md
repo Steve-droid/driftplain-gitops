@@ -1,30 +1,28 @@
 # CLAUDE.md — driftplain-gitops
 
-## Claude Code continuation — HM4 home GitOps and app — September 15, 2026
+## Claude Code continuation — HM5 sustainable public operation — September 17, 2026
 
-Read [the HM4 handoff](../docs/session-handoffs/E21-home-hosting/2026-09-15-hm4-home-gitops-app.md)
-first and [umbrella instructions](../CLAUDE.md). HM3 is complete: `argocd/home-server/root.yaml`
-(the home App-of-Apps, argo-cd 9.5.21) reconciles `cnpg-operator` (0.29.0 / 1.30.0) and
-`modelmatch-postgres` with `values-home-server.yaml`; the restored production copy (alembic
-`a4b5c6d7e8f9`) lives in `app` on a Retain PV. AWS production remains unchanged.
+Read [the HM5 handoff](../docs/session-handoffs/E21-home-hosting/2026-09-17-hm5-sustainable-public-operation.md)
+first and [umbrella instructions](../CLAUDE.md). HM4 is complete (v0.20.0 / v0.21.0): the home
+root `argocd/home-server/root.yaml` reconciles `cnpg-operator`, `modelmatch-postgres`,
+`sealed-secrets`, `cert-manager`, `nginx-ingress` (F5 2.6.0, **ClusterIP**), `cluster-issuers`
+(private `home-server-ca`), `app-secrets` (sealed) and the `modelmatch` umbrella with
+`charts/modelmatch/values-home-server.yaml` (GHCR digests, no IRSA, `LLM_CLIENT=fake`,
+`BLOB_STORE=fake`, private hosts). AWS production remains unchanged and byte-identical.
 
-**Do not apply the AWS umbrella unchanged to home.** HM4 adds, under the same root and only
-through PRs merged to `main`: home children for `sealed-secrets` (chart 2.20.0 / 0.40.0),
-`nginx-ingress` (F5 2.6.0, **ClusterIP** Service, no NLB annotations), `cert-manager` (v1.20.2),
-a home `cluster-issuers` profile with a self-signed issuer (no Let's Encrypt HTTP-01 at home),
-sealed manifests for `app/modelmatch-app-secrets` (exactly `JWT_SECRET`, `POSTGRES_PASSWORD`,
-`CHAT_READONLY_DB_PASSWORD`, `DEMO_SEED_PASSWORD`) and `app/modelmatch-db-app`, and a home
-`modelmatch` umbrella with `charts/modelmatch/values-home-server.yaml`: GHCR images by digest,
-no IRSA annotation, `LLM_CLIENT=fake`, `BLOB_STORE=fake`, private
-`app.home-server.driftplain.dev` / `api.home-server.driftplain.dev` hosts, sslip/branded hosts off,
-limits kept. The AWS default render must stay byte-identical (profile knobs only, chart 0.2.0 pattern).
-
-Migration policy: the migrate hook stays disabled at home; the 1.0.24 image's alembic head equals
-the restored revision, so no migration runs. Any future schema step against home is an explicit,
-separately reviewed change, never a hook or tag bump. Both seed flags stay false. Tests:
-`../driftplain-backend/.venv/bin/python tests/test_home_server_profile.py` (extend, keep green).
-Existing AWS pins (cnpg 0.28.3, ESO, EBS SC, NLB) are untouched. No public DNS/cutover or
-scheduled backup/renewal work belongs in this slice.
+HM5 adds, under the same root and only through PRs merged to `main`: a `cloudflared` connector
+child (in-repo chart, image pinned by digest, token from a Sealed Secret, routes restricted to
+the staging hostnames, origin = the F5 ingress ClusterIP over **verified** TLS with the
+`home-server-ca` pool — never `noTLSVerify`, no cluster administration through the tunnel), a
+`monitoring` child (kube-prometheus-stack 85.2.2 — the AWS pin — with tight limits, no
+Alertmanager, no logging stack, PrometheusRules for disk 70/85 %, certificate expiry, CNPG and
+app health) plus the in-repo dashboards, a heartbeat CronJob that pings the external monitor
+only while no critical alert fires, and the gated `home-server-backup` CronJob chart (disabled
+until Roles Anywhere sessions are approved). Public runtime hosts (`driftplain.dev`,
+`api.driftplain.dev`, `modicum.cloud`) are never routed at home before HM7. Fix the root
+OutOfSync (the all-default `directory.recurse=false` on `app-secrets`). Tests:
+`../driftplain-backend/.venv/bin/python tests/test_home_server_profile.py` (extend, keep green;
+AWS renders unchanged). Migration policy, seed flags and the existing AWS pins are untouched.
 
 **Current working preference (Steve, September 15):** keep progressing and pause only
 for critical architectural decisions. Plan, use focused tests for new behavior, verify and
