@@ -57,6 +57,10 @@ spec:
             kubeSchedulerAlerting: false
             kubeSchedulerRecording: false
             windows: false
+          # No Alertmanager by design (the heartbeat carries alert state out), so the stock
+          # "not connected to Alertmanagers" warning would fire forever — off at home.
+          disabled:
+            PrometheusNotConnectedToAlertmanagers: true
 
         prometheusOperator:
           resources:

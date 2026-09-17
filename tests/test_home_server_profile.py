@@ -452,6 +452,7 @@ class HomeMonitoringTests(unittest.TestCase):
                     "kubeEtcd", "kubeProxy"):
             self.assertFalse(self.values[key]["enabled"], key)
         self.assertFalse(self.values["prometheusOperator"]["admissionWebhooks"]["enabled"])
+        self.assertTrue(self.values["defaultRules"]["disabled"]["PrometheusNotConnectedToAlertmanagers"])
         self.assertFalse(self.values["grafana"]["persistence"]["enabled"])
         self.assertEqual(self.home["spec"]["ignoreDifferences"], self.aws["spec"]["ignoreDifferences"])
         self.assertIn("ServerSideApply=true", self.home["spec"]["syncPolicy"]["syncOptions"])
