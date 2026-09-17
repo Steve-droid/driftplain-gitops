@@ -587,7 +587,15 @@ class HomeBackupChartTests(unittest.TestCase):
     def test_default_render_is_suspended_and_carries_no_credentials(self):
         docs = render(BACKUP, namespace="home-server-backups")
         self.assertEqual(set(docs), {("CronJob", "home-server-backup"), ("ConfigMap", "home-server-backup"),
-                                     ("ServiceAccount", "home-server-backup")})
+                                     ("ServiceAccount", "home-server-backup"),
+                                     ("SealedSecret", "home-server-backup-db-owner")})
+        sealed = docs["SealedSecret", "home-server-backup-db-owner"]
+        self.assertEqual(set(sealed["spec"]["encryptedData"]), {"username", "password"})
+        self.assertTrue(all(v.startswith("Ag") and len(v) > 500 for v in sealed["spec"]["encryptedData"].values()))
+        self.assertEqual(sealed["spec"]["template"],
+                         {"type": "kubernetes.io/basic-auth",
+                          "metadata": {"name": "home-server-backup-db-owner", "namespace": "home-server-backups"}})
+        self.assertNotIn("data", sealed["spec"])
         job = docs["CronJob", "home-server-backup"]
         self.assertTrue(job["spec"]["suspend"])
         pod = job["spec"]["jobTemplate"]["spec"]["template"]["spec"]
@@ -618,6 +626,13 @@ class HomeBackupChartTests(unittest.TestCase):
                                 cwd=ROOT, text=True, capture_output=True)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("image.digest is required", result.stderr)
+        half = subprocess.run(["helm", "template", "backup", str(BACKUP), "--set", "sealed.encryptedPassword="],
+                              cwd=ROOT, text=True, capture_output=True)
+        self.assertNotEqual(half.returncode, 0)
+        self.assertIn("must both be set", half.stderr)
+        docs = render(BACKUP, namespace="home-server-backups",
+                      sets=("sealed.encryptedUsername=", "sealed.encryptedPassword="))
+        self.assertNotIn(("SealedSecret", "home-server-backup-db-owner"), docs)
         digest = "sha256:" + "ab" * 32
         docs = render(BACKUP, namespace="home-server-backups", sets=("enabled=true", f"image.digest={digest}"))
         job = docs["CronJob", "home-server-backup"]

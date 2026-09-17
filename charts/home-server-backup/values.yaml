@@ -21,9 +21,15 @@ database:
   host: modelmatch-postgres-rw.app.svc
   port: "5432"
   name: modelmatch
-  # A strict-scope sealed copy of app/modelmatch-db-app for THIS namespace (username/password);
-  # not yet sealed — the CronJob cannot mount a Secret from `app`.
+  # A strict-scope sealed copy of app/modelmatch-db-app for THIS namespace (username/password),
+  # rendered from `sealed` below — the CronJob cannot mount a Secret from `app`.
   secretName: home-server-backup-db-owner
+sealed:
+  # SealedSecret encryptedData for database.secretName, produced on the Mac by
+  # home-server-sealing-keys.py seal-backup-owner (September 17, 2026; controller key
+  # sealed-secrets-keyh7gb7). Both empty = no Secret rendered; one empty = render fails.
+  encryptedUsername: "AgBRM7UR3jY3qwLXfy1hWqS42qDzr162Ezrtc+zw6ndCKwq9PKErQqMrEBIkM3YNkx4gbzvBq4ltexIK+L+N0GLPpuclXFET84S17YXYBNk6hIy/v24yC8QFqTIuNoGmSPqNOGCjQPiUNo3kkxF2BNYPXgtaLcQHGtotVHJ+ti/EgdkS7n7QfNgbGPNin4z5phJ78daxmehwmwu5pMOg87UTJsOgbPWNThCmK8EYd7F1nUW8GCBmtKy/Ho9wiW77lhYGSCwXRLc8oZGh+KlGCdgjkNZU7/hbhjjqBWOcLY7gVuQ4+AKvBrpfvuBloTg0AFTQTloU/OFYZ+M9h1aeiBbkgqIzUIOhwfXGS9N5S7SsGu5JJ+BWqbjvS7qN/cHOfMIXwzs7msh14wmOZtioZknLfBMwBPJQ4I2WQC34OHrsUm9HYBX4vfEBvMBRs/79WMMc3j/55yXPB7pUiHxhy7kJC+dN9oryCWkRcd1ehfXWocXnNuX4Y41bDAfKTc3AeAqMlNix1pbQHMcWq+QwAh+o87MfitYPXQHZQN5Z5E1CdUEb8QgIzOTWKs9OthCGvWVN0oO27pOxQcYQ/UONTreJcMFOYdZpEH09EOHwoAXtYVnswGBpfm9y/aJLN862/X4kNGq2poSuuhDsJinLeB9Txf6u/Wxvz7eHJdmGpjagx23/r64UTfXrWOKtBguVSj1G7F7ObRcHZLbI"
+  encryptedPassword: "AgCspJwN585il3jWW3A7AR07Woo8rPtNwCs+fnVp5+dUVo2wP6QP9sQG0OOS/1xr5djhon6E0wqeUcREPSnoqLigiyX/G52ZOq8pqqm6Mk94jvkDJpGyf7oqfUO+6s5mZYBcCKQ/ohwFqwBIKYxemxPhYf4ODuzQ8+nD5cnzNN7owGX+9TbIb51SYRNz2bgnubmGpo/KQnSHXRuMNQ+bp/ojXd6M61Z01Ui5vN5sRBBF7dPpMGmiuLO1/8uyGod2OROfc8OD9ALwddf9LaBxvKnzkrqF9APXVOvius36H7/8rXk0sVzkedN9GwFBk6HfB3RCMwE2R8XEct4WA75+lGO0ne33a9x8TkuDejOv2uNESH5DkKEP69aZCNXXozgG2ZTwlqGPCqK3hQPSf3ZwuuLg+D4C4atT7Tc0wt+j9VM1eW2SKJI4NmFcDmh3tPnwFc58bh0sGkOk9JVU4S7je7YnqLwMB5AA7jEWneKJp4j+EtyMko8uvhlFNve5r/45H9KkqcDFoB6mAoYVewUUY6zydj/J3yssW68ErX43OeaVUSCOFzSnEdNqIcnC8zs86deATyagEdqoE4NwLM0imf4hWzbWvN9l1QyAbWkhIunTeu/4xKDDLPeZkCeE3oPB/lFK2OeohHVVnuid8y6gT54cBf/dyZrbyLFncDmJ0vHlOGXGP/B8eWn8dbV4bj09QrLIrZfB1WumydZWJdOicJxPM/9/sCpb63mDAc4jZ1CbiNh1xUWsqFPMUCQV"
 bucket: modelmatch-home-server-backups-957261948820
 recipient: age1vcy5ynjmhrv587m5e8pvgm42gwrwxj4smzzcywhxckrl47xqea8qcewa7m # recovery-key-v1 public recipient
 resources:
