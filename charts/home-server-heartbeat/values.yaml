@@ -1,10 +1,10 @@
 # charts/home-server-heartbeat — home-only (no AWS profile).
 #
-# enabled: false keeps the CronJob suspended. Turn it on together with sealed.encryptedUrl,
+# enabled: false keeps the CronJob suspended. On since September 18 with sealed.encryptedUrl,
 # the heartbeat URL sealed (strict scope) for monitoring/home-server-heartbeat by
-# driftplain-infra home-server/home-server-sealing-keys.py. The URL is a bearer-like token:
+# driftplain-infra home-server/home-server-sealing-keys.py seal-value (value on stdin). The URL is a bearer-like token:
 # never in plain values, never in logs (the script prints outcomes, never the URL).
-enabled: false
+enabled: true
 schedule: "*/5 * * * *"
 image:
   repository: curlimages/curl
@@ -17,7 +17,9 @@ secret:
   name: home-server-heartbeat
   key: url
 sealed:
-  encryptedUrl: "" # SealedSecret encryptedData.url; empty = no Secret rendered (CronJob stays suspended)
+  # SealedSecret encryptedData.url; empty = no Secret rendered (CronJob stays suspended).
+  # Sealed September 18 for the external monitor; re-seal after the controller key renews.
+  encryptedUrl: "AgAl2mfaJ36hP0uHezw1v6HFGzXB3Gc+Fl2nnVFGaBHEYGZ4y1gaGOGAADVKK3WY3oT5M0MFZJBnaL9MYmCl+Hj0Htl0OPHG3/EYD0qCYnIod2YGYfbVQwpKJT9D7mvGnji/ainesyUmV7K948rnGm5X8rFc4wj0EsQeBU4RE3L6jYjCMC+reBPmYJ321GbIp6O4ZkjPm6lyhPPe0yM4xu3MzFKzb4IsZ5WRmFufRTfHGRyDKqOL4nxllRV8wAhOaAfsh4NFh0/btPG8lnXgXjOEQOgaHnb5TnVFp2OSNF+r/tHKjOGUxv7kc9SIpzxL/EOXRQ/ThgyW0j7dYl64RdFHaiQwoxu3NUdpVcmGDF7XxMVUeCJJs0lNVZdOHuUjrBP8tzgULVOYAU93LFH6MLQBilCci21FsTqokOfRILS2KLFQ/8Ap2V+RBEkaV9IO2PUObthH7Mdz5frqdSwpNWA1t3gldMzOeV2gZv3DJFmXz+LgaRHVo5GD3fmp4Gc//e6faFfPY1WVMdZGqCN26WTdIZnNo7G4WJIgv7SE/vmzTOA8P1NikfebOy0QBIgMkngjXqqTU4CFMtjErPLtI0vJYC9n8uCN4x4fKwZ7UPRDEBNGVpREz1vFeqZH7VtyMTZBNU0IB8SBHEH7fIVZemg7MqWooFlfqIvZvEweu1pFzXUdC6ANt+XZlKjFyriWLUfbYIp1CqiV0Jij5idDxNgu7N3XwTDyRArPGuizzcQWBPgf6fCuQX97VqB9J0RAUpjicQ8glJkOjA=="
 resources:
   requests: { cpu: 10m, memory: 16Mi }
   limits: { cpu: 50m, memory: 32Mi }

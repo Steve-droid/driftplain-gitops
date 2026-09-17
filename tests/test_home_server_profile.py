@@ -523,11 +523,15 @@ class HomeMonitoringTests(unittest.TestCase):
 class HomeHeartbeatChartTests(unittest.TestCase):
     """charts/home-server-heartbeat: suspended by default, pings only on a clean Prometheus answer."""
 
-    def test_default_render_is_suspended_with_no_secret(self):
+    def test_committed_default_is_enabled_with_the_sealed_url(self):
         docs = render(HEARTBEAT, namespace="monitoring")
-        self.assertEqual(set(docs), {("CronJob", "home-server-heartbeat"), ("ConfigMap", "home-server-heartbeat")})
+        self.assertEqual(set(docs), {("CronJob", "home-server-heartbeat"), ("ConfigMap", "home-server-heartbeat"),
+                                     ("SealedSecret", "home-server-heartbeat")})
         job = docs["CronJob", "home-server-heartbeat"]
-        self.assertTrue(job["spec"]["suspend"])
+        self.assertFalse(job["spec"]["suspend"])
+        self.assertEqual(job["spec"]["schedule"], "*/5 * * * *")
+        self.assertRegex(docs["SealedSecret", "home-server-heartbeat"]["spec"]["encryptedData"]["url"],
+                         r"^Ag[A-Za-z0-9+/=]{500,}$")
         self.assertEqual(job["spec"]["concurrencyPolicy"], "Forbid")
         pod = job["spec"]["jobTemplate"]["spec"]["template"]["spec"]
         self.assertFalse(pod["automountServiceAccountToken"])
@@ -542,6 +546,11 @@ class HomeHeartbeatChartTests(unittest.TestCase):
         self.assertNotIn("value", env["HEARTBEAT_URL"])
         self.assertEqual(docs["ConfigMap", "home-server-heartbeat"]["data"]["heartbeat.sh"],
                          (HEARTBEAT / "scripts" / "heartbeat.sh").read_text().rstrip("\n"))
+
+    def test_gated_render_is_suspended_with_no_secret(self):
+        docs = render(HEARTBEAT, namespace="monitoring", sets=("enabled=false", "sealed.encryptedUrl="))
+        self.assertEqual(set(docs), {("CronJob", "home-server-heartbeat"), ("ConfigMap", "home-server-heartbeat")})
+        self.assertTrue(docs["CronJob", "home-server-heartbeat"]["spec"]["suspend"])
 
     def test_enabling_with_a_sealed_url_renders_the_sealed_secret_and_unsuspends(self):
         docs = render(HEARTBEAT, namespace="monitoring",
