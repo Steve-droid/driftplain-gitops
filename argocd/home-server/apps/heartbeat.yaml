@@ -1,0 +1,31 @@
+# E21/HM5 — the health heartbeat CronJob on the HOME cluster (charts/home-server-heartbeat).
+#
+# Every five minutes it asks the home Prometheus whether any CRITICAL alert is firing and
+# pings the external heartbeat monitor only when none is. A firing alert, a dead Prometheus,
+# a dead node or a dead uplink all look the same from outside: a missed heartbeat. Disabled
+# (suspended) until the external monitor exists and its URL is sealed for `monitoring`
+# (values: enabled + sealed.encryptedUrl). sync-wave "2": after the monitoring child (1).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: heartbeat
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Steve-droid/driftplain-gitops.git
+    targetRevision: main
+    path: charts/home-server-heartbeat
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true # tolerate either ordering vs the monitoring child

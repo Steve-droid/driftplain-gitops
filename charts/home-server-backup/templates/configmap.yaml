@@ -1,0 +1,17 @@
+# The AWS profile (credential_process through the mounted leaf — no static keys anywhere)
+# and the export script, shipped from scripts/backup.sh so tests read the same file.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: home-server-backup
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: home-server-backup
+    app.kubernetes.io/part-of: driftplain-home-server
+data:
+  aws-config: |-
+    [profile home-server-backup]
+    region = {{ .Values.identity.region }}
+    credential_process = /usr/local/bin/aws_signing_helper credential-process --certificate /identity/tls.crt --private-key /identity/tls.key --trust-anchor-arn {{ .Values.identity.trustAnchorArn }} --profile-arn {{ .Values.identity.profileArn }} --role-arn {{ .Values.identity.roleArn }} --region {{ .Values.identity.region }}
+  backup.sh: |-
+{{ .Files.Get "scripts/backup.sh" | indent 4 }}

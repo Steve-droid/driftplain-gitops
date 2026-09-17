@@ -1,6 +1,7 @@
 """E21 home-server profile contracts: the AWS renders are unchanged, the home renders carry
 no EKS/IRSA/ESO/EBS/NLB assumptions, and the home root reconciles exactly the reviewed
-children (HM3 database; HM4 platform + app). Requires helm + PyYAML."""
+children (HM3 database; HM4 platform + app; HM5 monitoring, heartbeat, gated backup).
+Requires helm + PyYAML."""
 import pathlib
 import re
 import subprocess
@@ -13,6 +14,8 @@ CHART = ROOT / "charts" / "modelmatch-postgres"
 UMBRELLA = ROOT / "charts" / "modelmatch"
 ISSUERS = ROOT / "charts" / "cluster-issuers"
 HOME_APPS = ROOT / "argocd" / "home-server" / "apps"
+HEARTBEAT = ROOT / "charts" / "home-server-heartbeat"
+BACKUP = ROOT / "charts" / "home-server-backup"
 AWS_APPS = ROOT / "argocd" / "apps"
 GHCR = "ghcr.io/steve-droid"
 DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
@@ -102,6 +105,12 @@ class HomePostgresProfileTests(unittest.TestCase):
                           "dkr.ecr", "957261948820", "ebs.csi", "external-secrets.io",
                           "DEMO_SEED_PASSWORD", "PostSync"):
             self.assertNotIn(forbidden, rendered, forbidden)
+
+    def test_home_turns_on_the_cnpg_pod_monitor_and_aws_does_not(self):
+        home = render(CHART, "values.yaml", "values-home-server.yaml")["Cluster", "modelmatch-postgres"]
+        self.assertEqual(home["spec"]["monitoring"], {"enablePodMonitor": True})
+        aws = render(CHART, "values.yaml")["Cluster", "modelmatch-postgres"]
+        self.assertNotIn("monitoring", aws["spec"])
 
     def test_seed_or_migrate_cannot_be_reenabled_by_a_tag_bump_alone(self):
         bumped = render(CHART, "values.yaml", "values-home-server.yaml", sets=("migrate.image.tag=1.0.24",))
@@ -324,6 +333,9 @@ class HomeApplicationTests(unittest.TestCase):
         if (HOME_APPS / "app-secrets.yaml").exists():
             self.assertLess(wave("sealed-secrets.yaml"), wave("app-secrets.yaml"))
             self.assertLess(wave("app-secrets.yaml"), wave("modelmatch-postgres.yaml"))
+        self.assertLess(wave("monitoring.yaml"), wave("monitoring-dashboards.yaml"))
+        self.assertLess(wave("monitoring.yaml"), wave("heartbeat.yaml"))
+        self.assertLess(wave("sealed-secrets.yaml"), wave("backup.yaml"))
 
 
 class HomeSealedManifestTests(unittest.TestCase):
@@ -356,7 +368,8 @@ class HomeSealedManifestTests(unittest.TestCase):
     def test_sealed_directory_is_the_app_secrets_child_source(self):
         app = load(HOME_APPS / "app-secrets.yaml")
         self.assertEqual(app["spec"]["source"]["path"], "argocd/home-server/sealed")
-        self.assertEqual(app["spec"]["source"]["directory"], {"recurse": False})
+        # HM5: no all-default directory block — ArgoCD drops it live and the root stays OutOfSync.
+        self.assertNotIn("directory", app["spec"]["source"])
         self.assertEqual(app["spec"]["destination"]["namespace"], "app")
         self.assertNotIn("CreateNamespace=true", app["spec"].get("syncPolicy", {}).get("syncOptions", []))
 
@@ -387,6 +400,7 @@ class HomeRootTests(unittest.TestCase):
     HM3_CHILDREN = ["cnpg-operator.yaml", "modelmatch-postgres.yaml"]
     HM4_PLATFORM = ["cert-manager.yaml", "cluster-issuers.yaml", "nginx-ingress.yaml", "sealed-secrets.yaml"]
     HM4_APP = ["app-secrets.yaml", "modelmatch.yaml"]
+    HM5_OPERATION = ["monitoring.yaml", "monitoring-dashboards.yaml", "heartbeat.yaml", "backup.yaml"]
 
     def setUp(self):
         self.root = load(ROOT / "argocd" / "home-server" / "root.yaml")
@@ -406,7 +420,7 @@ class HomeRootTests(unittest.TestCase):
 
     def test_root_directory_holds_only_reviewed_children(self):
         children = sorted(p.name for p in HOME_APPS.glob("*.yaml"))
-        allowed = set(self.HM3_CHILDREN + self.HM4_PLATFORM + self.HM4_APP)
+        allowed = set(self.HM3_CHILDREN + self.HM4_PLATFORM + self.HM4_APP + self.HM5_OPERATION)
         self.assertTrue(set(children) <= allowed, children)
         self.assertTrue(set(self.HM3_CHILDREN + self.HM4_PLATFORM) <= set(children), children)
         for name in children:
@@ -418,6 +432,204 @@ class HomeRootTests(unittest.TestCase):
             source = app["spec"]["source"]
             if "path" in source:
                 self.assertEqual(source["targetRevision"], "main", name)
+
+
+# ── HM5: bounded monitoring, the heartbeat and the gated backup ─────────────────
+
+class HomeMonitoringTests(unittest.TestCase):
+    """The home monitoring child mirrors the AWS trim, adds the home rules and scrapes."""
+
+    def setUp(self):
+        self.home = load(HOME_APPS / "monitoring.yaml")
+        self.aws = load(AWS_APPS / "monitoring.yaml")
+        self.values = yaml.safe_load(self.home["spec"]["source"]["helm"]["values"])
+        self.aws_values = yaml.safe_load(self.aws["spec"]["source"]["helm"]["values"])
+
+    def test_same_chart_pin_and_trim_as_aws(self):
+        for key in ("repoURL", "chart", "targetRevision"):
+            self.assertEqual(self.home["spec"]["source"][key], self.aws["spec"]["source"][key])
+        for key in ("alertmanager", "windowsMonitoring", "kubeControllerManager", "kubeScheduler",
+                    "kubeEtcd", "kubeProxy"):
+            self.assertFalse(self.values[key]["enabled"], key)
+        self.assertFalse(self.values["prometheusOperator"]["admissionWebhooks"]["enabled"])
+        self.assertFalse(self.values["grafana"]["persistence"]["enabled"])
+        self.assertEqual(self.home["spec"]["ignoreDifferences"], self.aws["spec"]["ignoreDifferences"])
+        self.assertIn("ServerSideApply=true", self.home["spec"]["syncPolicy"]["syncOptions"])
+        self.assertEqual(self.home["spec"]["destination"]["namespace"], "monitoring")
+        self.assertNotIn("ingress", self.values["grafana"])
+
+    def test_every_component_is_capped_and_the_tsdb_is_bounded(self):
+        spec = self.values["prometheus"]["prometheusSpec"]
+        self.assertEqual(spec["retention"], "2d")
+        self.assertEqual(spec["retentionSize"], "1GiB")
+        for component in (self.values["prometheusOperator"], spec, self.values["grafana"],
+                          self.values["grafana"]["sidecar"], self.values["kube-state-metrics"],
+                          self.values["prometheus-node-exporter"],
+                          self.values["prometheusOperator"]["prometheusConfigReloader"]):
+            self.assertIn("limits", component["resources"])
+        for key in ("serviceMonitor", "podMonitor", "rule", "probe"):
+            self.assertFalse(spec[f"{key}SelectorNilUsesHelmValues"], key)
+
+    def test_home_rules_cover_disk_certificates_database_app_and_node(self):
+        groups = self.values["additionalPrometheusRulesMap"]["home-server"]["groups"]
+        rules = {r["alert"]: r for g in groups for r in g["rules"]}
+        expected = {
+            "HomeServerRootDiskFilling": "warning", "HomeServerRootDiskCritical": "critical",
+            "HomeServerCertificateExpiringSoon": "warning", "HomeServerCertificateExpiryCritical": "critical",
+            "HomeServerDatabaseNotReady": "critical", "HomeServerAppUnavailable": "critical",
+            "HomeServerIngressUnavailable": "critical", "HomeServerArgoCDNotHealthy": "warning",
+            "HomeServerNodeNotReady": "critical", "HomeServerMemoryPressure": "warning",
+        }
+        self.assertEqual({name: r["labels"]["severity"] for name, r in rules.items()}, expected)
+        self.assertIn("> 70", rules["HomeServerRootDiskFilling"]["expr"])
+        self.assertIn("> 85", rules["HomeServerRootDiskCritical"]["expr"])
+        self.assertIn("14 * 24 * 3600", rules["HomeServerCertificateExpiringSoon"]["expr"])
+        self.assertIn("cnpg_collector_up", rules["HomeServerDatabaseNotReady"]["expr"])
+        for rule in rules.values():
+            self.assertIn("for", rule)
+            self.assertIn("summary", rule["annotations"])
+
+    def test_scrapes_backend_argocd_and_cert_manager(self):
+        prom = self.values["prometheus"]
+        self.assertEqual([m["name"] for m in prom["additionalServiceMonitors"]], ["modelmatch-backend"])
+        self.assertEqual({m["name"] for m in prom["additionalPodMonitors"]},
+                         {"argocd-application-controller", "cert-manager"})
+        cert = next(m for m in prom["additionalPodMonitors"] if m["name"] == "cert-manager")
+        self.assertEqual(cert["selector"]["matchLabels"]["app.kubernetes.io/component"], "controller")
+        self.assertEqual(cert["podMetricsEndpoints"][0]["port"], "http-metrics")
+
+    def test_dashboards_child_reuses_the_aws_chart(self):
+        home = load(HOME_APPS / "monitoring-dashboards.yaml")
+        aws = load(AWS_APPS / "monitoring-dashboards.yaml")
+        self.assertEqual(home["spec"]["source"]["path"], aws["spec"]["source"]["path"])
+        self.assertEqual(home["spec"]["destination"]["namespace"], "monitoring")
+
+    def test_aws_monitoring_is_untouched(self):
+        self.assertNotIn("additionalPrometheusRulesMap", self.aws_values)
+        self.assertEqual(len(self.aws_values["prometheus"]["additionalPodMonitors"]), 1)
+
+
+class HomeHeartbeatChartTests(unittest.TestCase):
+    """charts/home-server-heartbeat: suspended by default, pings only on a clean Prometheus answer."""
+
+    def test_default_render_is_suspended_with_no_secret(self):
+        docs = render(HEARTBEAT, namespace="monitoring")
+        self.assertEqual(set(docs), {("CronJob", "home-server-heartbeat"), ("ConfigMap", "home-server-heartbeat")})
+        job = docs["CronJob", "home-server-heartbeat"]
+        self.assertTrue(job["spec"]["suspend"])
+        self.assertEqual(job["spec"]["concurrencyPolicy"], "Forbid")
+        pod = job["spec"]["jobTemplate"]["spec"]["template"]["spec"]
+        self.assertFalse(pod["automountServiceAccountToken"])
+        self.assertTrue(pod["securityContext"]["runAsNonRoot"])
+        container = pod["containers"][0]
+        self.assertRegex(container["image"], r"^curlimages/curl@sha256:[0-9a-f]{64}$")
+        self.assertIn("limits", container["resources"])
+        self.assertTrue(container["securityContext"]["readOnlyRootFilesystem"])
+        env = {e["name"]: e for e in container["env"]}
+        self.assertEqual(env["HEARTBEAT_URL"]["valueFrom"]["secretKeyRef"],
+                         {"name": "home-server-heartbeat", "key": "url"})
+        self.assertNotIn("value", env["HEARTBEAT_URL"])
+        self.assertEqual(docs["ConfigMap", "home-server-heartbeat"]["data"]["heartbeat.sh"],
+                         (HEARTBEAT / "scripts" / "heartbeat.sh").read_text().rstrip("\n"))
+
+    def test_enabling_with_a_sealed_url_renders_the_sealed_secret_and_unsuspends(self):
+        docs = render(HEARTBEAT, namespace="monitoring",
+                      sets=("enabled=true", "sealed.encryptedUrl=AgBciphertext"))
+        self.assertFalse(docs["CronJob", "home-server-heartbeat"]["spec"]["suspend"])
+        sealed = docs["SealedSecret", "home-server-heartbeat"]
+        self.assertEqual(sealed["spec"]["encryptedData"], {"url": "AgBciphertext"})
+        self.assertEqual(sealed["spec"]["template"]["metadata"]["namespace"], "monitoring")
+
+    def run_script(self, answers, tmp):
+        """Run heartbeat.sh with a fake curl that answers Prometheus per `answers` and logs the ping."""
+        fake = tmp / "curl"
+        fake.write_text("#!/bin/sh\n"
+                        "for a in \"$@\"; do case \"$a\" in http://heartbeat.invalid/*) echo ping >> \"$FAKE_LOG\"; exit 0;; esac; done\n"
+                        "cat \"$FAKE_ANSWER\"\n")
+        fake.chmod(0o755)
+        answer = tmp / "answer.json"
+        answer.write_text(answers)
+        env = {"PATH": f"{tmp}:/usr/bin:/bin", "PROMETHEUS_URL": "http://prom.invalid",
+               "HEARTBEAT_URL": "http://heartbeat.invalid/ping", "FAKE_LOG": str(tmp / "log"),
+               "FAKE_ANSWER": str(answer)}
+        result = subprocess.run(["/bin/sh", str(HEARTBEAT / "scripts" / "heartbeat.sh")],
+                                env=env, text=True, capture_output=True)
+        pinged = (tmp / "log").exists()
+        return result.returncode, result.stdout.strip(), pinged
+
+    def test_script_pings_only_when_no_critical_alert_fires(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            tmp = pathlib.Path(d)
+            clean = '{"status":"success","data":{"resultType":"vector","result":[{"metric":{},"value":[1758100000.1,"0"]}]}}'
+            firing = clean.replace('"0"', '"2"')
+            ten = clean.replace('"0"', '"10"')
+            self.assertEqual(self.run_script(clean, tmp), (0, "heartbeat sent: no critical alert firing", True))
+            for answer in (firing, ten):
+                (tmp / "log").unlink(missing_ok=True)
+                code, out, pinged = self.run_script(answer, tmp)
+                self.assertEqual((code, pinged), (1, False), out)
+                self.assertIn("critical alert is firing", out)
+            (tmp / "log").unlink(missing_ok=True)
+            code, out, pinged = self.run_script('{"status":"error"}', tmp)
+            self.assertEqual((code, pinged), (1, False), out)
+            self.assertNotIn("heartbeat.invalid", out)
+
+
+class HomeBackupChartTests(unittest.TestCase):
+    """charts/home-server-backup: gated CronJob, no token, leaf + owner credential mounted only."""
+
+    def test_default_render_is_suspended_and_carries_no_credentials(self):
+        docs = render(BACKUP, namespace="home-server-backups")
+        self.assertEqual(set(docs), {("CronJob", "home-server-backup"), ("ConfigMap", "home-server-backup"),
+                                     ("ServiceAccount", "home-server-backup")})
+        job = docs["CronJob", "home-server-backup"]
+        self.assertTrue(job["spec"]["suspend"])
+        pod = job["spec"]["jobTemplate"]["spec"]["template"]["spec"]
+        self.assertFalse(pod["automountServiceAccountToken"])
+        self.assertFalse(docs["ServiceAccount", "home-server-backup"]["automountServiceAccountToken"])
+        container = pod["containers"][0]
+        env = {e["name"]: e for e in container["env"]}
+        for name in ("PGUSER", "PGPASSWORD"):
+            self.assertEqual(env[name]["valueFrom"]["secretKeyRef"]["name"], "home-server-backup-db-owner")
+        self.assertEqual(env["PGSSLMODE"]["value"], "require")
+        self.assertIn("limits", container["resources"])
+        self.assertTrue(container["securityContext"]["readOnlyRootFilesystem"])
+        volumes = {v["name"]: v for v in pod["volumes"]}
+        self.assertEqual(volumes["identity"]["secret"]["secretName"], "home-server-backup-identity")
+        self.assertEqual(volumes["identity"]["secret"]["defaultMode"], 0o400)
+        config = docs["ConfigMap", "home-server-backup"]["data"]
+        self.assertIn("credential_process = /usr/local/bin/aws_signing_helper", config["aws-config"])
+        self.assertIn("trust-anchor/913f6b1b-d09a-41be-8715-e41e04ecda90", config["aws-config"])
+        self.assertNotIn("aws_access_key_id", config["aws-config"])
+        script = config["backup.sh"]
+        self.assertEqual(script, (BACKUP / "scripts" / "backup.sh").read_text().rstrip("\n"))
+        self.assertIn("postgres/$tier/cluster-$stamp", script)
+        self.assertIn("age --encrypt -r", script)
+        self.assertNotIn("recovery/", script.split("prefix=")[1])  # never writes the recovery prefix
+
+    def test_enabling_requires_a_pinned_image_digest(self):
+        result = subprocess.run(["helm", "template", "backup", str(BACKUP), "--set", "enabled=true"],
+                                cwd=ROOT, text=True, capture_output=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("image.digest is required", result.stderr)
+        digest = "sha256:" + "ab" * 32
+        docs = render(BACKUP, namespace="home-server-backups", sets=("enabled=true", f"image.digest={digest}"))
+        job = docs["CronJob", "home-server-backup"]
+        self.assertFalse(job["spec"]["suspend"])
+        image = job["spec"]["jobTemplate"]["spec"]["template"]["spec"]["containers"][0]["image"]
+        self.assertEqual(image, f"ghcr.io/steve-droid/home-server-backup@{digest}")
+
+    def test_children_are_gated_and_namespaced(self):
+        backup = load(HOME_APPS / "backup.yaml")
+        self.assertEqual(backup["spec"]["source"]["path"], "charts/home-server-backup")
+        self.assertEqual(backup["spec"]["destination"]["namespace"], "home-server-backups")
+        self.assertNotIn("CreateNamespace=true", backup["spec"].get("syncPolicy", {}).get("syncOptions", []))
+        self.assertNotIn("helm", backup["spec"]["source"])  # values.yaml only: enabled=false is the gate
+        heartbeat = load(HOME_APPS / "heartbeat.yaml")
+        self.assertEqual(heartbeat["spec"]["source"]["path"], "charts/home-server-heartbeat")
+        self.assertEqual(heartbeat["spec"]["destination"]["namespace"], "monitoring")
+        self.assertNotIn("helm", heartbeat["spec"]["source"])
 
 
 if __name__ == "__main__":

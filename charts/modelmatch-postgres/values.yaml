@@ -60,6 +60,11 @@ cluster:
   # Optional node pinning (empty on AWS: the scheduler spreads across the 2 AZs).
   # The home profile pins the single instance to the one K3s node.
   nodeSelector: {}
+  # CNPG's own PodMonitor (metrics port 9187, cnpg_* series) for a kube-prometheus-stack
+  # Prometheus. OFF on AWS (unchanged render: the AWS Prometheus scrapes nothing from
+  # CNPG today); the home profile turns it on for the HM5 database-health rules.
+  monitoring:
+    enablePodMonitor: false
 # ── Storage: gp3 StorageClass (EBS CSI) + per-instance PVC ────────────────────
 # The default cluster `gp2` StorageClass uses the LEGACY in-tree provisioner
 # (kubernetes.io/aws-ebs), NOT the EBS CSI driver — so we author our own gp3 SC on

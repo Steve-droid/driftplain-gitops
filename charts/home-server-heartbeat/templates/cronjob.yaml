@@ -1,0 +1,63 @@
+# The heartbeat CronJob: one short curl pod every five minutes, no ServiceAccount token,
+# read-only root, unprivileged, capped. Suspended until `enabled`.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: home-server-heartbeat
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: home-server-heartbeat
+    app.kubernetes.io/part-of: driftplain-home-server
+spec:
+  schedule: {{ .Values.schedule | quote }}
+  suspend: {{ not .Values.enabled }}
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 120
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 90
+      ttlSecondsAfterFinished: 3600
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: home-server-heartbeat
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: {{ .Values.image.uid }}
+            runAsGroup: {{ .Values.image.gid }}
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: heartbeat
+              image: {{ .Values.image.repository }}@{{ .Values.image.digest }}
+              command: ["/bin/sh", "/scripts/heartbeat.sh"]
+              env:
+                - name: PROMETHEUS_URL
+                  value: {{ .Values.prometheusUrl | quote }}
+                - name: HEARTBEAT_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ .Values.secret.name }}
+                      key: {{ .Values.secret.key }}
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              resources:
+                {{- toYaml .Values.resources | nindent 16 }}
+              volumeMounts:
+                - name: scripts
+                  mountPath: /scripts
+                  readOnly: true
+          volumes:
+            - name: scripts
+              configMap:
+                name: home-server-heartbeat
+                defaultMode: 0555

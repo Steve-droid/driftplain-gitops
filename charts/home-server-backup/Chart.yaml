@@ -1,0 +1,9 @@
+apiVersion: v2
+name: home-server-backup
+description: >-
+  E21/HM5 — the in-cluster hourly encrypted PostgreSQL export of the home instance, uploaded
+  with the write-only Roles Anywhere backup leaf. Suspended until sessions, image and the
+  sealed owner credential exist.
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
