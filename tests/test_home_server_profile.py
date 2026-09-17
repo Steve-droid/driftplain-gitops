@@ -662,10 +662,18 @@ class HomeBackupChartTests(unittest.TestCase):
 
 
 class HomeCloudflaredChartTests(unittest.TestCase):
-    """charts/home-server-cloudflared: zero replicas until the token is sealed; verified origin TLS only."""
+    """charts/home-server-cloudflared: one replica with the sealed token; verified origin TLS only."""
 
-    def test_default_render_is_scaled_to_zero_with_no_secret(self):
+    def test_committed_default_is_enabled_with_the_sealed_tunnel_token(self):
         docs = render(CLOUDFLARED, namespace="cloudflared")
+        self.assertEqual(docs["Deployment", "home-server-cloudflared"]["spec"]["replicas"], 1)
+        sealed = docs["SealedSecret", "home-server-cloudflared-token"]
+        self.assertRegex(sealed["spec"]["encryptedData"]["token"], r"^Ag[A-Za-z0-9+/=]{500,}$")
+        self.assertEqual(sealed["spec"]["template"]["metadata"]["namespace"], "cloudflared")
+        self.assertIn(("ServiceMonitor", "home-server-cloudflared"), docs)
+
+    def test_gated_render_is_scaled_to_zero_with_no_secret(self):
+        docs = render(CLOUDFLARED, namespace="cloudflared", sets=("enabled=false", "sealed.encryptedToken="))
         self.assertEqual(set(docs), {("Deployment", "home-server-cloudflared"),
                                      ("ConfigMap", "home-server-cloudflared-ca"),
                                      ("Service", "home-server-cloudflared")})
@@ -708,7 +716,8 @@ class HomeCloudflaredChartTests(unittest.TestCase):
         self.assertEqual(by_name["HomeServerTunnelDegraded"]["labels"]["severity"], "warning")
 
     def test_enabling_without_a_token_fails_to_render(self):
-        result = subprocess.run(["helm", "template", "cloudflared", str(CLOUDFLARED), "--set", "enabled=true"],
+        result = subprocess.run(["helm", "template", "cloudflared", str(CLOUDFLARED),
+                                 "--set", "enabled=true", "--set", "sealed.encryptedToken="],
                                 cwd=ROOT, text=True, capture_output=True)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("sealed.encryptedToken", result.stderr)

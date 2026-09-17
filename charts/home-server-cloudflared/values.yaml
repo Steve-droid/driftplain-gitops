@@ -9,7 +9,7 @@
 # Routes live in the remotely managed tunnel configuration (driftplain-infra/cloudflare):
 # staging hosts only, origin = the F5 nginx-ingress ClusterIP Service over TLS verified against
 # the CA below with the private home-server SNI. Nothing here can set noTLSVerify.
-enabled: false
+enabled: true
 replicas: 1
 protocol: quic # falls back to http2 on its own when UDP 7844 is blocked upstream
 image:
@@ -22,7 +22,10 @@ secret:
   name: home-server-cloudflared-token
   key: token
 sealed:
-  encryptedToken: "" # SealedSecret encryptedData.token; empty = no Secret rendered (replicas stay 0)
+  # SealedSecret encryptedData.token for tunnel a27459ba-d201-4437-a963-f63ff3d49796, sealed on the Mac
+  # with home-server-sealing-keys.py seal-value (September 18, 2026; controller key sealed-secrets-keyh7gb7).
+  # Empty = no Secret rendered and replicas stay 0.
+  encryptedToken: "AgCtfFKpk0z2ORihAWw2tv70jq7JWCtWeVeUyIK5bXf9AazQmYjXU8EV502sOvQxiLRTMwzTlSSVCNylmsGPELs6pQyd4uZAtBBDpl9TjwonJgWQk2p81wgJcWuRe+rxwVqyfx66QD2p4mhGtAnLNqR5tpvVhTohrCDjvwgxGgos+swmnF55IrV/c5a3OwsdzKsI+BUVwikchZXXDonXmOF0DvD4L/iKWrVl0aJYSgRhdnzor1yUB3KA7CBZe0Qt3cTHRsScF4D1QYMT4WsE4tBp5qb296mKqKGHj9j/iYDa1Nz8SrSkBZMITB5qKE8Q39D1Pc0SntxVGxguURSUKrNG30lyiDV9JGSuu3mP3cghrPNtT2tKJTNiYbt2Ow851c5p2t+LG7O+maEILa4Xv4tPdwIlTx2CD/1t2HO7f35YPPELDO/F32UFuQKfcmUGwi+eOEn1lh/9hdvyEfTkQkAoAJxwhU7pj7xbPbn9cBlgNrXwHoePOh5QmV+xn7EIBZ1vAgIimFUrFfKgxcX870A59qSejzOgU+ogVo76YTCv613ebliRuKNjGFoVDLf0eGgTgye9pHFo3fJSfBzKkkfYK7WU3RprRB0/Zu4iu9yR9oSPq/b2vVZGluTHuwB80M0eGWTULjSNaG8xQrAxQ6YvBStl8qIYmRqKycLDMQgItFOPo6K/HH7Gf1WpBIekaCa1o3PbPSp+CJ0d/AK2cSx6G2I8JTDGuXvjAlquBFNs6b6RAgfr6G/UGYfxvrhKP1QQAjrK5iBwgF2Uhj01711sVPpnIX3a3Gwzxk+gLmAxWEJS+AK/Tt9REoWFiv3HwrvGY4TY3nlWAgPkOnx6VLF1xlqSdro5IMncuu0z5Ky7bpwqUxNTtEqNzxkJhJOMhy8e/r0VrSCtv8eg0sCETeUJaxsD7anDaVLFUP7Mmt1wdSsg2/ynYY2t3d6rvMnXAa344P8yRZhFFXdZBa1taPRhmmf8vdOZRrmoRSf4AeKWIi3Td9MkbsSe+qRBleeNd3w="
 metrics:
   port: 2000
   serviceMonitor: true # home Prometheus scrapes cloudflared_* (rendered only while enabled)
