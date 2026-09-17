@@ -361,6 +361,26 @@ class HomeSealedManifestTests(unittest.TestCase):
         self.assertNotIn("CreateNamespace=true", app["spec"].get("syncPolicy", {}).get("syncOptions", []))
 
 
+class HomeArgoCDValuesTests(unittest.TestCase):
+    """The home argo-cd install values: private server, limits everywhere, home health checks."""
+
+    def setUp(self):
+        self.values = load(ROOT / "argocd" / "home-server" / "argocd-values.yaml")
+
+    def test_server_is_private_and_every_component_is_capped(self):
+        self.assertEqual(self.values["server"]["service"]["type"], "ClusterIP")
+        self.assertFalse(self.values["dex"]["enabled"])
+        for component in ("controller", "server", "repoServer", "redis", "applicationSet"):
+            self.assertIn("limits", self.values[component]["resources"], component)
+
+    def test_ingress_health_does_not_wait_for_a_load_balancer_address(self):
+        cm = self.values["configs"]["cm"]
+        lua = cm["resource.customizations.health.networking.k8s.io_Ingress"]
+        self.assertIn('hs.status = "Healthy"', lua)
+        self.assertNotIn("loadBalancer", lua)
+        self.assertIn("resource.customizations.health.argoproj.io_Application", cm)
+
+
 class HomeRootTests(unittest.TestCase):
     """The home root App-of-Apps watches only the home child directory, from main."""
 

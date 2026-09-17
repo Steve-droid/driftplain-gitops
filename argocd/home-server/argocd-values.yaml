@@ -13,6 +13,20 @@ notifications:
   enabled: false
 configs:
   cm:
+    # E21/HM4: the home ingress controller is a ClusterIP Service (no cloud load balancer),
+    # so no controller ever writes status.loadBalancer.ingress on an Ingress and ArgoCD's
+    # built-in Ingress health would stay "Progressing" forever. At home an Ingress is
+    # Healthy once it exists with rules; reachability is proven by the HM4 validation
+    # (SSH port-forward to the ClusterIP) and later by the tunnel connector (HM5).
+    resource.customizations.health.networking.k8s.io_Ingress: |
+      hs = {}
+      hs.status = "Healthy"
+      hs.message = "ClusterIP ingress controller: no load-balancer address is expected at home"
+      if obj.spec == nil or obj.spec.rules == nil then
+        hs.status = "Degraded"
+        hs.message = "Ingress has no rules"
+      end
+      return hs
     resource.customizations.health.argoproj.io_Application: |
       hs = {}
       hs.status = "Progressing"
