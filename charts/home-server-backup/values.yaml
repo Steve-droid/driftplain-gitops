@@ -1,14 +1,14 @@
 # charts/home-server-backup — home-only (no AWS profile). GATED: enabled=false renders the
 # CronJob suspended. Enabling requires ALL of: Roles Anywhere sessions on (identity root),
 # image.digest of the published helper image, and the sealed owner credential Secret.
-enabled: false
+enabled: true
 schedule: "23 * * * *" # hourly; the run in dailyHourUtc lands under postgres/daily/
 dailyHourUtc: "01"
 image:
   # Built from driftplain-infra home-server/backup-image (postgresql-client 16, age, aws cli,
   # aws_signing_helper 1.8.5 pinned by SHA-256). Never :latest; digest required when enabled.
   repository: ghcr.io/steve-droid/home-server-backup
-  digest: ""
+  digest: sha256:8ec804bd9d3ab16e0b1df0fec3aff2db7df6bb4bf8a3f968aa1ba77f4b64ffb7 # 2026.09.17 tag, linux/amd64, built from backup-image at infra v0.28.0
   uid: 10001
   gid: 10001
 identity:

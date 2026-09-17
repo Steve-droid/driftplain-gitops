@@ -584,8 +584,17 @@ class HomeHeartbeatChartTests(unittest.TestCase):
 class HomeBackupChartTests(unittest.TestCase):
     """charts/home-server-backup: gated CronJob, no token, leaf + owner credential mounted only."""
 
-    def test_default_render_is_suspended_and_carries_no_credentials(self):
+    def test_committed_default_is_enabled_with_a_pinned_digest_and_the_gate_still_suspends(self):
         docs = render(BACKUP, namespace="home-server-backups")
+        job = docs["CronJob", "home-server-backup"]
+        self.assertFalse(job["spec"]["suspend"])
+        image = job["spec"]["jobTemplate"]["spec"]["template"]["spec"]["containers"][0]["image"]
+        self.assertRegex(image, r"^ghcr\.io/steve-droid/home-server-backup@sha256:[0-9a-f]{64}$")
+        gated = render(BACKUP, namespace="home-server-backups", sets=("enabled=false",))
+        self.assertTrue(gated["CronJob", "home-server-backup"]["spec"]["suspend"])
+
+    def test_render_carries_no_credentials_and_mounts_only_the_leaf_and_owner(self):
+        docs = render(BACKUP, namespace="home-server-backups", sets=("enabled=false",))
         self.assertEqual(set(docs), {("CronJob", "home-server-backup"), ("ConfigMap", "home-server-backup"),
                                      ("ServiceAccount", "home-server-backup"),
                                      ("SealedSecret", "home-server-backup-db-owner")})
