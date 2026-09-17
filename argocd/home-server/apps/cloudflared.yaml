@@ -1,0 +1,33 @@
+# E21/HM5 — the Cloudflare Tunnel connector on the HOME cluster (charts/home-server-cloudflared).
+#
+# Outbound-only pod that joins the named tunnel owned by driftplain-infra/cloudflare and serves
+# the public STAGING hosts (staging.driftplain.dev, api-staging.driftplain.dev) by dialing the
+# F5 nginx-ingress ClusterIP over TLS verified against home-server-ca. Routes are defined
+# remotely (Cloudflare-managed config, staging hosts only); the runtime hostnames move at HM7.
+# Scaled to zero until `enabled` + `sealed.encryptedToken` (the tunnel token sealed for
+# cloudflared/home-server-cloudflared-token). sync-wave "2": after sealed-secrets (-2) and the
+# monitoring child (1) whose Prometheus picks up the connector's ServiceMonitor/rules.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cloudflared
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Steve-droid/driftplain-gitops.git
+    targetRevision: main
+    path: charts/home-server-cloudflared
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: cloudflared
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

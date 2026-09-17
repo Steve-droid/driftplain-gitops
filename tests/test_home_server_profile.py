@@ -16,6 +16,7 @@ ISSUERS = ROOT / "charts" / "cluster-issuers"
 HOME_APPS = ROOT / "argocd" / "home-server" / "apps"
 HEARTBEAT = ROOT / "charts" / "home-server-heartbeat"
 BACKUP = ROOT / "charts" / "home-server-backup"
+CLOUDFLARED = ROOT / "charts" / "home-server-cloudflared"
 AWS_APPS = ROOT / "argocd" / "apps"
 GHCR = "ghcr.io/steve-droid"
 DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
@@ -336,6 +337,8 @@ class HomeApplicationTests(unittest.TestCase):
         self.assertLess(wave("monitoring.yaml"), wave("monitoring-dashboards.yaml"))
         self.assertLess(wave("monitoring.yaml"), wave("heartbeat.yaml"))
         self.assertLess(wave("sealed-secrets.yaml"), wave("backup.yaml"))
+        self.assertLess(wave("sealed-secrets.yaml"), wave("cloudflared.yaml"))
+        self.assertLess(wave("monitoring.yaml"), wave("cloudflared.yaml"))
 
 
 class HomeSealedManifestTests(unittest.TestCase):
@@ -400,7 +403,8 @@ class HomeRootTests(unittest.TestCase):
     HM3_CHILDREN = ["cnpg-operator.yaml", "modelmatch-postgres.yaml"]
     HM4_PLATFORM = ["cert-manager.yaml", "cluster-issuers.yaml", "nginx-ingress.yaml", "sealed-secrets.yaml"]
     HM4_APP = ["app-secrets.yaml", "modelmatch.yaml"]
-    HM5_OPERATION = ["monitoring.yaml", "monitoring-dashboards.yaml", "heartbeat.yaml", "backup.yaml"]
+    HM5_OPERATION = ["monitoring.yaml", "monitoring-dashboards.yaml", "heartbeat.yaml", "backup.yaml",
+                     "cloudflared.yaml"]
 
     def setUp(self):
         self.root = load(ROOT / "argocd" / "home-server" / "root.yaml")
@@ -631,6 +635,65 @@ class HomeBackupChartTests(unittest.TestCase):
         self.assertEqual(heartbeat["spec"]["source"]["path"], "charts/home-server-heartbeat")
         self.assertEqual(heartbeat["spec"]["destination"]["namespace"], "monitoring")
         self.assertNotIn("helm", heartbeat["spec"]["source"])
+
+
+class HomeCloudflaredChartTests(unittest.TestCase):
+    """charts/home-server-cloudflared: zero replicas until the token is sealed; verified origin TLS only."""
+
+    def test_default_render_is_scaled_to_zero_with_no_secret(self):
+        docs = render(CLOUDFLARED, namespace="cloudflared")
+        self.assertEqual(set(docs), {("Deployment", "home-server-cloudflared"),
+                                     ("ConfigMap", "home-server-cloudflared-ca"),
+                                     ("Service", "home-server-cloudflared")})
+        deploy = docs["Deployment", "home-server-cloudflared"]
+        self.assertEqual(deploy["spec"]["replicas"], 0)
+        pod = deploy["spec"]["template"]["spec"]
+        self.assertFalse(pod["automountServiceAccountToken"])
+        self.assertFalse(pod["hostNetwork"])
+        self.assertTrue(pod["securityContext"]["runAsNonRoot"])
+        container = pod["containers"][0]
+        self.assertRegex(container["image"], r"^cloudflare/cloudflared@sha256:[0-9a-f]{64}$")
+        self.assertEqual(container["args"][:2], ["tunnel", "--no-autoupdate"])
+        self.assertEqual(container["args"][-1], "run")
+        self.assertFalse(any("tls-verify" in a or "url" in a for a in container["args"]),
+                         "routes and origin TLS come from the remotely managed config; never noTLSVerify")
+        self.assertTrue(container["securityContext"]["readOnlyRootFilesystem"])
+        self.assertIn("limits", container["resources"])
+        env = {e["name"]: e for e in container["env"]}
+        self.assertEqual(env["TUNNEL_TOKEN"]["valueFrom"]["secretKeyRef"],
+                         {"name": "home-server-cloudflared-token", "key": "token"})
+        self.assertNotIn("value", env["TUNNEL_TOKEN"])
+        mounts = {m["mountPath"]: m for m in container["volumeMounts"]}
+        self.assertTrue(mounts["/etc/cloudflared/ca"]["readOnly"])
+        ca = docs["ConfigMap", "home-server-cloudflared-ca"]["data"]["home-server-ca.crt"]
+        self.assertTrue(ca.startswith("-----BEGIN CERTIFICATE-----"))
+        self.assertNotIn("PRIVATE KEY", ca)
+        self.assertEqual(container["readinessProbe"]["httpGet"]["path"], "/ready")
+
+    def test_enabling_with_a_sealed_token_renders_secret_monitoring_and_one_replica(self):
+        docs = render(CLOUDFLARED, namespace="cloudflared",
+                      sets=("enabled=true", "sealed.encryptedToken=AgBciphertext"))
+        self.assertEqual(docs["Deployment", "home-server-cloudflared"]["spec"]["replicas"], 1)
+        sealed = docs["SealedSecret", "home-server-cloudflared-token"]
+        self.assertEqual(sealed["spec"]["encryptedData"], {"token": "AgBciphertext"})
+        self.assertEqual(sealed["spec"]["template"]["metadata"]["namespace"], "cloudflared")
+        self.assertIn(("ServiceMonitor", "home-server-cloudflared"), docs)
+        rules = docs["PrometheusRule", "home-server-cloudflared"]["spec"]["groups"][0]["rules"]
+        by_name = {r["alert"]: r for r in rules}
+        self.assertEqual(by_name["HomeServerTunnelDisconnected"]["labels"]["severity"], "critical")
+        self.assertEqual(by_name["HomeServerTunnelDegraded"]["labels"]["severity"], "warning")
+
+    def test_enabling_without_a_token_fails_to_render(self):
+        result = subprocess.run(["helm", "template", "cloudflared", str(CLOUDFLARED), "--set", "enabled=true"],
+                                cwd=ROOT, text=True, capture_output=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("sealed.encryptedToken", result.stderr)
+
+    def test_child_targets_the_chart_in_its_own_namespace(self):
+        child = load(HOME_APPS / "cloudflared.yaml")
+        self.assertEqual(child["spec"]["source"]["path"], "charts/home-server-cloudflared")
+        self.assertEqual(child["spec"]["destination"]["namespace"], "cloudflared")
+        self.assertTrue(child["spec"]["syncPolicy"]["automated"]["prune"])
 
 
 if __name__ == "__main__":

@@ -1,0 +1,50 @@
+# charts/home-server-cloudflared — home-only (no AWS profile).
+#
+# enabled: false keeps the Deployment at zero replicas. Turn it on together with
+# sealed.encryptedToken: the tunnel token (driftplain-infra `terraform -chdir=cloudflare output
+# -raw tunnel_token`) sealed strict-scope for cloudflared/home-server-cloudflared-token by
+# driftplain-infra home-server/home-server-sealing-keys.py. The token is a credential: never in
+# plain values, never in logs.
+#
+# Routes live in the remotely managed tunnel configuration (driftplain-infra/cloudflare):
+# staging hosts only, origin = the F5 nginx-ingress ClusterIP Service over TLS verified against
+# the CA below with the private home-server SNI. Nothing here can set noTLSVerify.
+enabled: false
+replicas: 1
+protocol: quic # falls back to http2 on its own when UDP 7844 is blocked upstream
+image:
+  repository: cloudflare/cloudflared
+  digest: sha256:b269e8abd07a5bf6f3f4be65d5050b2174eca89c56a0241a8ff32a16aec454e4 # 2026.9.1
+  # The official image runs as the distroless `nonroot` user.
+  uid: 65532
+  gid: 65532
+secret:
+  name: home-server-cloudflared-token
+  key: token
+sealed:
+  encryptedToken: "" # SealedSecret encryptedData.token; empty = no Secret rendered (replicas stay 0)
+metrics:
+  port: 2000
+  serviceMonitor: true # home Prometheus scrapes cloudflared_* (rendered only while enabled)
+  rules: true # HomeServerTunnelDisconnected (critical) / HomeServerTunnelDegraded (warning)
+origin:
+  # Where the tunnel config's originRequest.caPool expects the pool (mounted from the ConfigMap).
+  caPoolPath: /etc/cloudflared/ca/home-server-ca.crt
+  # Public certificate of the GitOps-owned home CA (cert-manager/home-server-ca, CN
+  # driftplain-home-server-ca, valid 2026-09-15 → 2036-09-12, SHA-256 fingerprint
+  # 36:F0:97:CA:22:94:5A:28:7D:8C:3A:07:0A:7C:1D:F8:32:AE:DD:D0:5F:EB:35:E6:13:6F:66:0C:14:17:FC:0E).
+  caCertificate: |
+    -----BEGIN CERTIFICATE-----
+    MIIBjDCCATKgAwIBAgIUQyc0mEzNokFIKLPoVecw8Scv/mEwCgYIKoZIzj0EAwIw
+    JDEiMCAGA1UEAxMZZHJpZnRwbGFpbi1ob21lLXNlcnZlci1jYTAeFw0yNjA5MTUx
+    NjU1MjNaFw0zNjA5MTIxNjU1MjNaMCQxIjAgBgNVBAMTGWRyaWZ0cGxhaW4taG9t
+    ZS1zZXJ2ZXItY2EwWTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAAQXmITTSe2kMSh1
+    0CA6/ELbbAnPwrWiMATlZ++AsCQBriS8D9ZVqgaYQwYSfGoI+0dlE93JyAQio916
+    O5iQWzDXo0IwQDAOBgNVHQ8BAf8EBAMCAqQwDwYDVR0TAQH/BAUwAwEB/zAdBgNV
+    HQ4EFgQUtjuCePvKh15unrpHFKyPhH+dr8MwCgYIKoZIzj0EAwIDSAAwRQIhAPal
+    jpWq+qdrBJOPs5knsuqHTWnF0AQYFYSCxLvNghQtAiA54sTnqgI2k/dYwg7BfqZx
+    29pOLgjlVKUz85A6qQd9lg==
+    -----END CERTIFICATE-----
+resources:
+  requests: { cpu: 25m, memory: 48Mi }
+  limits: { cpu: 250m, memory: 128Mi }

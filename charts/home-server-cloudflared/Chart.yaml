@@ -1,0 +1,9 @@
+apiVersion: v2
+name: home-server-cloudflared
+description: >-
+  E21/HM5 — Cloudflare Tunnel connector for the home cluster. Joins the named tunnel owned by
+  driftplain-infra/cloudflare and proxies the public staging hosts to the F5 nginx-ingress
+  over TLS verified against home-server-ca (never noTLSVerify). Home-only; no AWS profile.
+type: application
+version: 0.1.0
+appVersion: "2026.9.1"
