@@ -24,14 +24,14 @@ OutOfSync (the all-default `directory.recurse=false` on `app-secrets`). Tests:
 `../driftplain-backend/.venv/bin/python tests/test_home_server_profile.py` (extend, keep green;
 AWS renders unchanged). Migration policy, seed flags and the existing AWS pins are untouched.
 
-**HM5 status (September 18; v0.30.0):** the `monitoring`, `monitoring-dashboards`, `heartbeat`
-(enabled since v0.30.0 with the sealed monitor URL; pings every five minutes), `backup` (CronJob enabled with the pinned image digest and the
+**HM5 status (September 20; v0.31.0):** the `monitoring`, `monitoring-dashboards`, `heartbeat`
+(enabled since v0.30.0 with the sealed monitor URL; pings every five minutes; since v0.31.0 also withholds the ping unless both staging URLs answer through Cloudflare with their keywords), `backup` (CronJob enabled with the pinned image digest and the
 sealed owner credential; the pod stays in `ErrImagePull` until the GHCR package is public) and
 `cloudflared` (one replica with the sealed tunnel token; four tunnel connections, ServiceMonitor
 scraped) children are `Synced Healthy` under `home-server-root`. No gitops work is gated now; the
 notification test (September 18) paused automation on `home-server-root` and `heartbeat` for 26
 minutes by hand and restored it, because every home app self-heals.
-v0.29.0 added the `staging` host set to the home profile (`global.additionalHosts.staging`, `runtimeHostSet: staging`): the frontend at staging.driftplain.dev calls api-staging.driftplain.dev and the backend accepts that origin; the tunnel still dials the private branded pair. v0.30.0 enabled the heartbeat child with the sealed URL (re-seal after the controller key renews about October 15). Tests: `tests/test_home_server_profile.py` (67 across the suite, run with `../driftplain-backend/.venv/bin/python`). Next tag v0.31.0.
+v0.29.0 added the `staging` host set to the home profile (`global.additionalHosts.staging`, `runtimeHostSet: staging`): the frontend at staging.driftplain.dev calls api-staging.driftplain.dev and the backend accepts that origin; the tunnel still dials the private branded pair. v0.30.0 enabled the heartbeat child with the sealed URL (re-seal after the controller key renews about October 15). v0.31.0 added `edgeProbes` to the heartbeat chart (staging app keyword `Driftplain`, API `/healthz` keyword `ok`), replacing the planned external keyword monitors. Tests: `tests/test_home_server_profile.py` (68 across the suite, run with `../driftplain-backend/.venv/bin/python`). Next tag v0.32.0.
 
 **Current working preference (Steve, September 15):** keep progressing and pause only
 for critical architectural decisions. Plan, use focused tests for new behavior, verify and
