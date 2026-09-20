@@ -40,6 +40,10 @@ spec:
               env:
                 - name: PROMETHEUS_URL
                   value: {{ .Values.prometheusUrl | quote }}
+                - name: EDGE_PROBES
+                  {{- $probes := list }}
+                  {{- range .Values.edgeProbes }}{{ $probes = append $probes (printf "%s|%s" .url .keyword) }}{{ end }}
+                  value: {{ join " " $probes | quote }}
                 - name: HEARTBEAT_URL
                   valueFrom:
                     secretKeyRef:

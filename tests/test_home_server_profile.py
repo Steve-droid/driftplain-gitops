@@ -544,6 +544,8 @@ class HomeHeartbeatChartTests(unittest.TestCase):
         self.assertEqual(env["HEARTBEAT_URL"]["valueFrom"]["secretKeyRef"],
                          {"name": "home-server-heartbeat", "key": "url"})
         self.assertNotIn("value", env["HEARTBEAT_URL"])
+        self.assertEqual(env["EDGE_PROBES"]["value"],
+                         "https://staging.driftplain.dev/|Driftplain https://api-staging.driftplain.dev/healthz|ok")
         self.assertEqual(docs["ConfigMap", "home-server-heartbeat"]["data"]["heartbeat.sh"],
                          (HEARTBEAT / "scripts" / "heartbeat.sh").read_text().rstrip("\n"))
 
@@ -560,18 +562,24 @@ class HomeHeartbeatChartTests(unittest.TestCase):
         self.assertEqual(sealed["spec"]["encryptedData"], {"url": "AgBciphertext"})
         self.assertEqual(sealed["spec"]["template"]["metadata"]["namespace"], "monitoring")
 
-    def run_script(self, answers, tmp):
-        """Run heartbeat.sh with a fake curl that answers Prometheus per `answers` and logs the ping."""
+    def run_script(self, answers, tmp, probes="", edge_bodies=()):
+        """Run heartbeat.sh with a fake curl: Prometheus answers per `answers`, each edge URL answers
+        with its entry from `edge_bodies` (a body, or "FAIL" for a curl failure), and the ping is logged."""
         fake = tmp / "curl"
+        edge = "".join(f'  {url}) ' + ('exit 22' if body == "FAIL" else f'printf %s "{body}"; exit 0') + ';;\n'
+                       for url, body in edge_bodies)
         fake.write_text("#!/bin/sh\n"
-                        "for a in \"$@\"; do case \"$a\" in http://heartbeat.invalid/*) echo ping >> \"$FAKE_LOG\"; exit 0;; esac; done\n"
+                        "for a in \"$@\"; do case \"$a\" in\n"
+                        "  http://heartbeat.invalid/*) echo ping >> \"$FAKE_LOG\"; exit 0;;\n"
+                        f"{edge}"
+                        "  esac; done\n"
                         "cat \"$FAKE_ANSWER\"\n")
         fake.chmod(0o755)
         answer = tmp / "answer.json"
         answer.write_text(answers)
         env = {"PATH": f"{tmp}:/usr/bin:/bin", "PROMETHEUS_URL": "http://prom.invalid",
                "HEARTBEAT_URL": "http://heartbeat.invalid/ping", "FAKE_LOG": str(tmp / "log"),
-               "FAKE_ANSWER": str(answer)}
+               "FAKE_ANSWER": str(answer), "EDGE_PROBES": probes}
         result = subprocess.run(["/bin/sh", str(HEARTBEAT / "scripts" / "heartbeat.sh")],
                                 env=env, text=True, capture_output=True)
         pinged = (tmp / "log").exists()
@@ -594,6 +602,29 @@ class HomeHeartbeatChartTests(unittest.TestCase):
             code, out, pinged = self.run_script('{"status":"error"}', tmp)
             self.assertEqual((code, pinged), (1, False), out)
             self.assertNotIn("heartbeat.invalid", out)
+
+    def test_script_pings_only_when_every_edge_probe_answers_with_its_keyword(self):
+        import tempfile
+        clean = '{"status":"success","data":{"resultType":"vector","result":[{"metric":{},"value":[1758100000.1,"0"]}]}}'
+        probes = "https://app.invalid/|Driftplain https://api.invalid/healthz|ok"
+        app, api = "https://app.invalid/", "https://api.invalid/healthz"
+        html, health = "<title>Driftplain</title>", '{"status":"ok"}'
+        with tempfile.TemporaryDirectory() as d:
+            tmp = pathlib.Path(d)
+            self.assertEqual(self.run_script(clean, tmp, probes, [(app, html), (api, health)]),
+                             (0, "heartbeat sent: no critical alert firing, edge probes ok", True))
+            for bodies, message in (([(app, "FAIL"), (api, health)], "edge probe failed: https://app.invalid/"),
+                                    ([(app, html), (api, "FAIL")], "edge probe failed: https://api.invalid/healthz"),
+                                    ([(app, "<title>Modicum</title>"), (api, health)], "keyword missing: https://app.invalid/"),
+                                    ([(app, html), (api, '{"status":"degraded"}')], "keyword missing: https://api.invalid/healthz")):
+                (tmp / "log").unlink(missing_ok=True)
+                code, out, pinged = self.run_script(clean, tmp, probes, bodies)
+                self.assertEqual((code, pinged), (1, False), out)
+                self.assertIn(message, out)
+            # A firing alert is checked first: the probes never run and nothing is pinged.
+            (tmp / "log").unlink(missing_ok=True)
+            code, out, pinged = self.run_script(clean.replace('"0"', '"1"'), tmp, probes, [(app, "FAIL")])
+            self.assertEqual((code, pinged, out), (1, False, "heartbeat withheld: a critical alert is firing"))
 
 
 class HomeBackupChartTests(unittest.TestCase):
