@@ -10,7 +10,7 @@ quality holds.
 
 This repo is the desired state of everything inside the Kubernetes cluster: a Helm umbrella for
 the app, in-repo charts for the platform pieces, and an ArgoCD app-of-apps that reconciles them.
-Since September 22, 2026 the live cluster is a single-node K3s at home
+Since September 22, 2026 the live cluster is a single-node K3s on a home Ubuntu server
 ([how it got there](https://github.com/Steve-droid/driftplain-infra/blob/main/home-server/HM7-CUTOVER.md)).
 ArgoCD is the only thing that applies to it.
 
@@ -38,7 +38,7 @@ charts/modelmatch-postgres/   CloudNativePG Cluster, storage class, migrate and 
 charts/{cluster-issuers, app-secrets, monitoring, logging}     platform children
 charts/home-server-{backup, heartbeat, cloudflared}            home only: hourly encrypted export to S3, edge heartbeat, tunnel connector
 tests/                  offline render and contract tests (pytest, no cluster)
-scripts/recompute-host.sh   AWS-era sslip.io host recompute, unused at home
+scripts/recompute-host.sh   AWS-era sslip.io host recompute, unused on the home server
 docs/diagrams/          CNPG operator and Cluster CR (draw.io)
 ```
 
