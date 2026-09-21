@@ -1,5 +1,15 @@
 # CLAUDE.md — driftplain-gitops
 
+## AWS compute retired — September 21, 2026
+
+The EKS cluster no longer exists (see
+[AWS-COMPUTE-RETIREMENT.md](../driftplain-infra/home-server/AWS-COMPUTE-RETIREMENT.md)). The
+AWS profile (`argocd/` root apps, `values.yaml`/`values-dev.yaml`, ECR pins) is now a **reference
+render only**: keep `test_home_server_profile.py` asserting it renders unchanged, but nothing
+reconciles it and no image bump for it has any effect. The home root (`argocd/home-server/`) is
+the only live deployment. HM7 (cutover to home) adds the runtime hostnames to the home host set
+and the tunnel routes; "AWS production remains unchanged" sentences below are historical.
+
 ## Claude Code continuation — HM5 sustainable public operation — September 17, 2026
 
 Read [the HM5 handoff](../docs/session-handoffs/E21-home-hosting/2026-09-17-hm5-sustainable-public-operation.md)
