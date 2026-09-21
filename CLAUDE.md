@@ -12,13 +12,17 @@ the only live deployment. **HM7 done (September 22, v0.33.0):** `values-home-ser
 config.js, `PUBLIC_BASE_URL`, CORS and the Google origin check follow the runtime pair, and the
 heartbeat probes four edge URLs. `LLM_CLIENT=fake` / `BLOB_STORE=fake` stay by decision; since
 v0.34.0 the home backend is 1.0.25 (built locally → GHCR), which answers that the assistant is
-offline instead of "try rephrasing". "AWS
-production remains unchanged" sentences below are historical. Next tag: v0.35.0.
+offline instead of "try rephrasing". **HM8 (September 22, infra v0.38.0):** ECR is deleted;
+new releases publish to public GHCR from GitHub Actions on a tag (backend `vX.Y.Z` /
+`agent-vX.Y.Z`, frontend `vX.Y.Z`); the job summary prints the digest to pin in
+`values-home-server.yaml`. The retired AWS profile (`argocd/apps/`, `values.yaml` ECR pins) still
+renders for the contract tests only. "AWS production remains unchanged" sentences below are
+historical. Next tag: v0.35.0.
 
 ## Claude Code continuation — HM5 sustainable public operation — September 17, 2026
 
-Read [the HM5 handoff](../docs/session-handoffs/E21-home-hosting/2026-09-17-hm5-sustainable-public-operation.md)
-first and [umbrella instructions](../CLAUDE.md). HM4 is complete (v0.20.0 / v0.21.0): the home
+Follow [umbrella instructions](../CLAUDE.md) (the HM5 handoff was removed with the
+session-handoff archive at HM8). HM4 is complete (v0.20.0 / v0.21.0): the home
 root `argocd/home-server/root.yaml` reconciles `cnpg-operator`, `modelmatch-postgres`,
 `sealed-secrets`, `cert-manager`, `nginx-ingress` (F5 2.6.0, **ClusterIP**), `cluster-issuers`
 (private `home-server-ca`), `app-secrets` (sealed) and the `modelmatch` umbrella with
