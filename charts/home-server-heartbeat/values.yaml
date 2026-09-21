@@ -16,6 +16,10 @@ prometheusUrl: http://kube-prometheus-stack-prometheus.monitoring.svc:9090
 # Public-path probes: each URL is fetched through the Cloudflare edge (edge -> tunnel -> ingress)
 # and must answer 2xx with the keyword in the body, or the heartbeat is withheld. Empty = skipped.
 edgeProbes:
+  - url: https://driftplain.dev/
+    keyword: Driftplain
+  - url: https://api.driftplain.dev/healthz
+    keyword: ok
   - url: https://staging.driftplain.dev/
     keyword: Driftplain
   - url: https://api-staging.driftplain.dev/healthz

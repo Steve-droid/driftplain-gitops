@@ -24,8 +24,11 @@ HOME_APP_HOST = "app.home-server.driftplain.dev"
 HOME_API_HOST = "api.home-server.driftplain.dev"
 STAGING_APP_HOST = "staging.driftplain.dev"
 STAGING_API_HOST = "api-staging.driftplain.dev"
+RUNTIME_APP_HOST = "driftplain.dev"
+RUNTIME_API_HOST = "api.driftplain.dev"
+# The runtime pair is served from home since HM7 (September 22, 2026); modicum.cloud never is.
 AWS_ONLY = ("dkr.ecr", "eks.amazonaws.com/role-arn", "ebs.csi", "external-secrets.io",
-            "aws-load-balancer", "sslip.io", "letsencrypt", "modicum.cloud", "driftplain.dev\"")
+            "aws-load-balancer", "sslip.io", "letsencrypt", "modicum.cloud")
 
 
 def render(chart, *value_files, sets=(), namespace=None, release=None):
@@ -204,8 +207,14 @@ class HomeUmbrellaProfileTests(unittest.TestCase):
         config = self.docs["ConfigMap", "modelmatch-backend-config"]["data"]
         self.assertEqual(config["LLM_CLIENT"], "fake")
         self.assertEqual(config["BLOB_STORE"], "fake")
-        self.assertEqual(config["PUBLIC_BASE_URL"], f"https://{STAGING_API_HOST}")
-        self.assertEqual(config["CORS_ALLOW_ORIGINS"], f"https://{HOME_APP_HOST},https://{STAGING_APP_HOST}")
+        # HM7: the runtime host set is selected; the browser at https://driftplain.dev calls
+        # api.driftplain.dev and both public app origins (runtime, staging) pass CORS and the
+        # Google sign-in origin check. The private branded origin stays first.
+        self.assertEqual(config["PUBLIC_BASE_URL"], f"https://{RUNTIME_API_HOST}")
+        self.assertEqual(config["CORS_ALLOW_ORIGINS"],
+                         f"https://{HOME_APP_HOST},https://{RUNTIME_APP_HOST},https://{STAGING_APP_HOST}")
+        self.assertEqual(config["GOOGLE_CLIENT_ID"],
+                         load(UMBRELLA / "values.yaml")["backend"]["config"]["GOOGLE_CLIENT_ID"])
         self.assertEqual(config["DATABASE_URL"],
                          "postgresql+psycopg://modelmatch@modelmatch-postgres-rw:5432/modelmatch")
         self.assertEqual(config["CHAT_READONLY_DB_USER"], "modelmatch_chat_ro")
@@ -214,19 +223,35 @@ class HomeUmbrellaProfileTests(unittest.TestCase):
             self.assertTrue(registry_repo.startswith(GHCR + "/modelmatch-agent"), config[key])
             self.assertRegex(digest, DIGEST)
         frontend = self.docs["ConfigMap", "modelmatch-frontend-config"]["data"]
-        self.assertEqual(frontend["API_BASE_URL"], f"https://{STAGING_API_HOST}")
+        self.assertEqual(frontend["API_BASE_URL"], f"https://{RUNTIME_API_HOST}")
+
+    def test_runtime_host_set_is_the_selected_one_and_matches_the_aws_pair(self):
+        # The same public hostnames AWS served (P38r) now select the home runtime, so the
+        # Google client's authorized origins and every bookmark/CI URL stay valid.
+        home, aws = load(UMBRELLA / "values-home-server.yaml")["global"], load(UMBRELLA / "values.yaml")["global"]
+        self.assertEqual(home["runtimeHostSet"], "driftplain")
+        self.assertEqual(home["additionalHosts"]["driftplain"],
+                         {"enabled": True, "appHost": RUNTIME_APP_HOST, "apiHost": RUNTIME_API_HOST})
+        self.assertEqual({k: aws["additionalHosts"]["driftplain"][k] for k in ("appHost", "apiHost")},
+                         {"appHost": RUNTIME_APP_HOST, "apiHost": RUNTIME_API_HOST})
+        self.assertTrue(home["additionalHosts"]["staging"]["enabled"])
 
     def test_private_hosts_only_with_the_home_ca_issuer(self):
         ingresses = {name: obj for (kind, name), obj in self.docs.items() if kind == "Ingress"}
         self.assertEqual(set(ingresses), {"modelmatch-app-branded", "modelmatch-app-branded-routes",
                                           "modelmatch-api-branded", "modelmatch-api-branded-routes",
                                           "modelmatch-api-branded-auth",
+                                          "modelmatch-app-driftplain", "modelmatch-app-driftplain-routes",
+                                          "modelmatch-api-driftplain", "modelmatch-api-driftplain-routes",
+                                          "modelmatch-api-driftplain-auth",
                                           "modelmatch-app-staging", "modelmatch-app-staging-routes",
                                           "modelmatch-api-staging", "modelmatch-api-staging-routes",
                                           "modelmatch-api-staging-auth"})
         hosts = {rule["host"] for obj in ingresses.values() for rule in obj["spec"]["rules"]}
-        self.assertEqual(hosts, {HOME_APP_HOST, HOME_API_HOST, STAGING_APP_HOST, STAGING_API_HOST})
+        self.assertEqual(hosts, {HOME_APP_HOST, HOME_API_HOST, RUNTIME_APP_HOST, RUNTIME_API_HOST,
+                                 STAGING_APP_HOST, STAGING_API_HOST})
         for master in ("modelmatch-app-branded", "modelmatch-api-branded",
+                       "modelmatch-app-driftplain", "modelmatch-api-driftplain",
                        "modelmatch-app-staging", "modelmatch-api-staging"):
             annotations = ingresses[master]["metadata"]["annotations"]
             self.assertEqual(annotations["cert-manager.io/cluster-issuer"], "home-server-ca")
@@ -545,6 +570,7 @@ class HomeHeartbeatChartTests(unittest.TestCase):
                          {"name": "home-server-heartbeat", "key": "url"})
         self.assertNotIn("value", env["HEARTBEAT_URL"])
         self.assertEqual(env["EDGE_PROBES"]["value"],
+                         "https://driftplain.dev/|Driftplain https://api.driftplain.dev/healthz|ok "
                          "https://staging.driftplain.dev/|Driftplain https://api-staging.driftplain.dev/healthz|ok")
         self.assertEqual(docs["ConfigMap", "home-server-heartbeat"]["data"]["heartbeat.sh"],
                          (HEARTBEAT / "scripts" / "heartbeat.sh").read_text().rstrip("\n"))
