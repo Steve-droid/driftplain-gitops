@@ -1,13 +1,15 @@
 # values-home-server.yaml — E21/HM4 home-server PROFILE for the charts/modelmatch umbrella.
 #
 # Layered ON TOP of values.yaml (ArgoCD: helm.valueFiles [values.yaml, this]); it overrides
-# only what differs at home, so the application CONTRACT is unchanged: the same 1.0.24 images
+# only what differs at home, so the application CONTRACT is unchanged: the release images
 # (by content digest, not by tag), the same Secret name/keys, DATABASE_URL to the same CNPG
 # `-rw` Service, the same limits (backend 1Gi ingestion-OOM cap), the same rate limits.
 #
 # What differs, and why:
-#   • Images: the public GHCR copies of the SAME release images, pinned by digest (the digest
-#     equals the ECR source digest — a manifest/layer copy, no rebuild). No ECR token to expire.
+#   • Images: public GHCR, pinned by digest. Frontend/agents are the 1.0.24 / 1.1.3 ECR copies
+#     (crane copy, digest equals the ECR source). Backend is 1.0.25, built locally for
+#     linux/amd64 from the v1.0.25 tag and pushed to GHCR (no Jenkins since the AWS
+#     retirement): the honest offline chat answer for LLM_CLIENT=fake. No ECR token to expire.
 #   • No IRSA: there is no EKS webhook. `irsaRoleName: ""` omits the annotation; the pod then
 #     holds NO AWS identity (the Roles Anywhere mount is a separate HM5 approval).
 #   • Isolated validation: LLM_CLIENT=fake and BLOB_STORE=fake — no Bedrock call, no S3 write.
@@ -44,7 +46,7 @@ ingress:
 backend:
   image:
     registry: ghcr.io/steve-droid
-    digest: "sha256:027d9fef425c56e43bf9d637db043325d5ddf5fc9f23990cf048619d3a10e528"
+    digest: "sha256:df0d18b761b7efbb14c3e14267c5ccb80725cc3a418e8f09e83480314cc0a348"
   serviceAccount:
     irsaRoleName: ""
   config:
