@@ -7,8 +7,11 @@ The EKS cluster no longer exists (see
 AWS profile (`argocd/` root apps, `values.yaml`/`values-dev.yaml`, ECR pins) is now a **reference
 render only**: keep `test_home_server_profile.py` asserting it renders unchanged, but nothing
 reconciles it and no image bump for it has any effect. The home root (`argocd/home-server/`) is
-the only live deployment. HM7 (cutover to home) adds the runtime hostnames to the home host set
-and the tunnel routes; "AWS production remains unchanged" sentences below are historical.
+the only live deployment. **HM7 done (September 22, v0.33.0):** `values-home-server.yaml` selects
+`runtimeHostSet: driftplain` (driftplain.dev / api.driftplain.dev enabled beside `staging`), so
+config.js, `PUBLIC_BASE_URL`, CORS and the Google origin check follow the runtime pair, and the
+heartbeat probes four edge URLs. `LLM_CLIENT=fake` / `BLOB_STORE=fake` stay by decision. "AWS
+production remains unchanged" sentences below are historical. Next tag: v0.34.0.
 
 ## Claude Code continuation — HM5 sustainable public operation — September 17, 2026
 
