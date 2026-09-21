@@ -10,8 +10,10 @@ reconciles it and no image bump for it has any effect. The home root (`argocd/ho
 the only live deployment. **HM7 done (September 22, v0.33.0):** `values-home-server.yaml` selects
 `runtimeHostSet: driftplain` (driftplain.dev / api.driftplain.dev enabled beside `staging`), so
 config.js, `PUBLIC_BASE_URL`, CORS and the Google origin check follow the runtime pair, and the
-heartbeat probes four edge URLs. `LLM_CLIENT=fake` / `BLOB_STORE=fake` stay by decision. "AWS
-production remains unchanged" sentences below are historical. Next tag: v0.34.0.
+heartbeat probes four edge URLs. `LLM_CLIENT=fake` / `BLOB_STORE=fake` stay by decision; since
+v0.34.0 the home backend is 1.0.25 (built locally → GHCR), which answers that the assistant is
+offline instead of "try rephrasing". "AWS
+production remains unchanged" sentences below are historical. Next tag: v0.35.0.
 
 ## Claude Code continuation — HM5 sustainable public operation — September 17, 2026
 
