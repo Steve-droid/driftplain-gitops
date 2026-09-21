@@ -13,10 +13,14 @@
 #   • Isolated validation: LLM_CLIENT=fake and BLOB_STORE=fake — no Bedrock call, no S3 write.
 #     Production never sees these values; they exist only in this profile.
 #   • Hosts: the branded pair is private (app/api.home-server.driftplain.dev, not in public
-#     DNS; the tunnel dials the ingress with that SNI and Host header). The `staging` host set
-#     (HM5) is the public pair behind Cloudflare: it selects the runtime API URL the frontend
-#     calls and the CORS origin the backend accepts. Its ingress objects render like any host
-#     set but never receive traffic. sslip.io and the driftplain runtime set stay off; the F5
+#     DNS; the tunnel dials the ingress with that SNI and Host header). Two public host sets
+#     sit behind Cloudflare: `driftplain` (the runtime pair driftplain.dev / api.driftplain.dev,
+#     served from home since HM7 — the September 22, 2026 cutover after the AWS compute
+#     retirement) and `staging` (HM5). `runtimeHostSet: driftplain` selects the API URL the
+#     frontend's config.js names and puts https://driftplain.dev among the CORS origins the
+#     backend (and its Google sign-in origin check) accepts; the staging pair stays enabled as
+#     an accepted origin. Public host-set ingress objects render like any host set but never
+#     receive traffic (the tunnel arrives with the private SNI). sslip.io stays off; the F5
 #     ingress masters name the private CA issuer `home-server-ca`.
 #   • Agent images in the generated Jenkins snippets point at the public GHCR copies.
 global:
@@ -25,10 +29,12 @@ global:
   apiHost: "api.home-server.driftplain.dev"
   useCustomHosts: true
   retainSslipHosts: false
-  runtimeHostSet: "staging"
+  runtimeHostSet: "driftplain"
   additionalHosts:
     driftplain:
-      enabled: false
+      enabled: true
+      appHost: "driftplain.dev"
+      apiHost: "api.driftplain.dev"
     staging:
       enabled: true
       appHost: "staging.driftplain.dev"
