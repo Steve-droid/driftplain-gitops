@@ -6,10 +6,10 @@
 # `-rw` Service, the same limits (backend 1Gi ingestion-OOM cap), the same rate limits.
 #
 # What differs, and why:
-#   • Images: public GHCR, pinned by digest. Frontend/agents are the 1.0.24 / 1.1.3 ECR copies
-#     (crane copy, digest equals the ECR source). Backend is 1.0.25, built locally for
-#     linux/amd64 from the v1.0.25 tag and pushed to GHCR (no Jenkins since the AWS
-#     retirement): the honest offline chat answer for LLM_CLIENT=fake. No ECR token to expire.
+#   • Images: public GHCR, pinned by digest. Agents are the 1.1.3 ECR copies (crane copy,
+#     digest equals the ECR source). Backend 1.0.25 was built locally from its tag (the honest
+#     offline chat answer for LLM_CLIENT=fake). Frontend 1.0.25 is the first image published by
+#     the GitHub Actions release workflow (run 35668758676): the temporary-demo notice is gone.
 #   • No IRSA: there is no EKS webhook. `irsaRoleName: ""` omits the annotation; the pod then
 #     holds NO AWS identity (the Roles Anywhere mount is a separate HM5 approval).
 #   • Isolated validation: LLM_CLIENT=fake and BLOB_STORE=fake — no Bedrock call, no S3 write.
@@ -57,4 +57,4 @@ backend:
 frontend:
   image:
     registry: ghcr.io/steve-droid
-    digest: "sha256:c7b61ab3b642659073b659653836190a74f369475ff5732e6313c4489e6a6de2"
+    digest: "sha256:592ed15e2b2010394d00ec36f20fd0fd58d8d6b66c73a9d90801750556d0fea0"
