@@ -2,7 +2,13 @@
 
 [driftplain.dev](https://driftplain.dev) · [Frontend](https://github.com/Steve-droid/driftplain-frontend) · [Backend](https://github.com/Steve-droid/driftplain-backend) · [Infra](https://github.com/Steve-droid/driftplain-infra) · **GitOps**
 
-The desired state of everything inside the Driftplain Kubernetes cluster: a Helm umbrella for
+Driftplain picks a cheaper LLM for code review from benchmark data and runs it in the user's CI
+on the user's own API key. There are two agents. The review agent makes one API call with the PR
+diff and the user's review preferences. The security agent runs an agentic loop with OpenCode
+over the checkout and reports vulnerabilities. The dashboard shows the money saved while review
+quality holds.
+
+This repo is the desired state of everything inside the Kubernetes cluster: a Helm umbrella for
 the app, in-repo charts for the platform pieces, and an ArgoCD app-of-apps that reconciles them.
 Since September 22, 2026 the live cluster is a single-node K3s at home
 ([how it got there](https://github.com/Steve-droid/driftplain-infra/blob/main/home-server/HM7-CUTOVER.md)).
