@@ -19,7 +19,7 @@ ArgoCD is the only thing that applies to it.
 1. An app repo pushes a tag. GitHub Actions builds the image and pushes it to
    `ghcr.io/steve-droid/modelmatch-<image>:X.Y.Z`. The job summary prints the digest.
 2. A PR here pins that digest in `charts/modelmatch/values-home-server.yaml`.
-3. On merge, the ArgoCD home root (prune and selfHeal) rolls it out.
+3. On merge, ArgoCD on the home server (prune and selfHeal) rolls it out.
 
 Humans author chart structure. Image changes are digest bumps in a reviewed PR. Nobody runs
 `helm install` or `kubectl apply` for app resources by hand. A release with a schema change runs
@@ -50,11 +50,14 @@ helm template modelmatch charts/modelmatch -f charts/modelmatch/values.yaml -f c
 uv run --with pyyaml --with pytest pytest tests
 ```
 
-The tests assert that the home profile renders what is documented (digests, hosts, fake seams,
+The tests assert that the home-server values render what is documented (digests, hosts, fake seams,
 limits on every container, probes on `/healthz` and `/readyz`) and that the retired AWS profile
 still renders unchanged.
 
-## What the home profile changes
+## How the home server differs from the original EKS deployment
+
+The charts were written for EKS. `values-home-server.yaml` and `argocd/home-server/` adapt them
+to the single-node K3s cluster on the home Ubuntu server:
 
 - Images come from public GHCR by digest, so no registry token can expire.
 - `LLM_CLIENT=fake` and `BLOB_STORE=fake`, no IRSA. The pod holds no AWS identity. The chat
@@ -67,7 +70,7 @@ still renders unchanged.
 ## Conventions
 
 - `feature/<slice>-<description>`, then a PR to `main`. Conventional Commits. A SemVer tag per merged slice.
-- One reviewed change per PR to the live profile. Digest pins only, never `latest`.
+- One reviewed change per PR to the home-server values. Digest pins only, never `latest`.
 - Every container has requests and limits. Migrations never run on backend startup.
 
 Steve Levit, stevelevit230@gmail.com
