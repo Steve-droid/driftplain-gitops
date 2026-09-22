@@ -43,7 +43,12 @@ the new backend is deployed. The backend never runs migrations at startup.
 | [charts/home-server-cloudflared](charts/home-server-cloudflared/) | Cloudflare Tunnel connector and its configuration. |
 | [tests](tests/) | Local chart-rendering tests for hosts, image pins, storage, resource limits and migration behavior. |
 
-The `modelmatch` chart and image names remain from the project's original name.
+New image releases use `driftplain-*` package names. The current deployment still pins
+existing `modelmatch-*` images. For the first deployment of each new package, update both
+`image.repository` and `image.digest`; agent references use `AGENT_IMAGE` and
+`AGENT_SECURITY_IMAGE`. Verify anonymous pulls before merging a deployment change.
+See the [image naming policy](https://github.com/Steve-droid/driftplain/blob/main/IMAGE-NAMING.md).
+Chart names and Kubernetes resource names keep their existing `modelmatch` identifiers.
 
 ## Home-server configuration
 

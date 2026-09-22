@@ -2,6 +2,7 @@
 no EKS/IRSA/ESO/EBS/NLB assumptions, and the home root reconciles exactly the reviewed
 children (HM3 database; HM4 platform + app; HM5 monitoring, heartbeat, gated backup).
 Requires helm + PyYAML."""
+import copy
 import pathlib
 import re
 import subprocess
@@ -202,6 +203,36 @@ class HomeUmbrellaProfileTests(unittest.TestCase):
         for forbidden in AWS_ONLY:
             self.assertNotIn(forbidden, rendered, forbidden)
         self.assertNotIn("annotations", self.docs["ServiceAccount", "modelmatch-backend"]["metadata"])
+
+    def test_new_image_packages_preserve_resources_and_runtime_configuration(self):
+        digest = "sha256:" + "1" * 64
+        review = f"{GHCR}/driftplain-agent@{digest}"
+        security = f"{GHCR}/driftplain-agent-security@{digest}"
+        updated = render(
+            UMBRELLA, "values.yaml", "values-home-server.yaml",
+            namespace="app", release="modelmatch", sets=(
+                "backend.image.repository=driftplain-backend",
+                f"backend.image.digest={digest}",
+                "frontend.image.repository=driftplain-frontend",
+                f"frontend.image.digest={digest}",
+                f"backend.config.AGENT_IMAGE={review}",
+                f"backend.config.AGENT_SECURITY_IMAGE={security}",
+            ),
+        )
+        expected = copy.deepcopy(self.docs)
+        for component in ("backend", "frontend"):
+            containers(expected, f"modelmatch-{component}")[0]["image"] = (
+                f"{GHCR}/driftplain-{component}@{digest}"
+            )
+        config = expected["ConfigMap", "modelmatch-backend-config"]["data"]
+        config["AGENT_IMAGE"] = review
+        config["AGENT_SECURITY_IMAGE"] = security
+        # The backend must roll to pick up the changed agent references.
+        old_annotations = expected["Deployment", "modelmatch-backend"]["spec"]["template"]["metadata"]["annotations"]
+        new_annotations = updated["Deployment", "modelmatch-backend"]["spec"]["template"]["metadata"]["annotations"]
+        self.assertNotEqual(old_annotations["checksum/config"], new_annotations["checksum/config"])
+        old_annotations["checksum/config"] = new_annotations["checksum/config"]
+        self.assertEqual(updated, expected)
 
     def test_isolated_validation_config(self):
         config = self.docs["ConfigMap", "modelmatch-backend-config"]["data"]
