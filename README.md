@@ -11,7 +11,7 @@ quality holds.
 This repo is the desired state of everything inside the Kubernetes cluster: a Helm umbrella for
 the app, in-repo charts for the platform pieces, and an ArgoCD app-of-apps that reconciles them.
 Since September 22, 2026 the live cluster is a single-node K3s on a home Ubuntu server
-([how it got there](https://github.com/Steve-droid/driftplain-infra/blob/main/home-server/HM7-CUTOVER.md)).
+([migration record](https://github.com/Steve-droid/driftplain-infra/blob/main/home-server/HM7-CUTOVER.md)).
 ArgoCD is the only thing that applies to it.
 
 ## How a change reaches the cluster
