@@ -17,7 +17,9 @@ new releases publish to public GHCR from GitHub Actions on a tag (backend `vX.Y.
 `agent-vX.Y.Z`, frontend `vX.Y.Z`); the job summary prints the digest to pin in
 `values-home-server.yaml`. The retired AWS profile (`argocd/apps/`, `values.yaml` ECR pins) still
 renders for the contract tests only. "AWS production remains unchanged" sentences below are
-historical. Next tag: v0.36.0.
+historical. **HM6 (September 22):** frontend 1.0.25 (no demo notice, v0.36.0) and 1.0.26 (privacy
+page for the home deployment, v0.37.0) were the first releases pinned from the GitHub Actions
+release workflow. Next tag: v0.38.0.
 
 ## Claude Code continuation — HM5 sustainable public operation — September 17, 2026
 
