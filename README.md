@@ -21,9 +21,13 @@ ArgoCD is the only thing that applies to it.
 2. A PR here pins that digest in `charts/modelmatch/values-home-server.yaml`.
 3. On merge, ArgoCD on the home server (prune and selfHeal) rolls it out.
 
-Humans author chart structure. Image changes are digest bumps in a reviewed PR. Nobody runs
-`helm install` or `kubectl apply` for app resources by hand. A release with a schema change runs
-the Alembic migration as a Job of the Postgres chart before the backend pin moves.
+Every change goes through this repo. To deploy a new image, change the digest in the values
+file and open a PR. To change how something is deployed, edit the chart and open a PR. Nothing
+is applied to the cluster with `helm install` or `kubectl apply` by hand, so the cluster always
+matches `main`.
+
+If a backend release changes the database schema, the Alembic migration runs first as a Job in
+the Postgres chart, and the backend digest is updated only after it succeeds.
 
 ## Layout
 
