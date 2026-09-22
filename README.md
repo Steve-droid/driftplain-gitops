@@ -1,80 +1,80 @@
-# Driftplain gitops
+# Driftplain GitOps
 
-[driftplain.dev](https://driftplain.dev) · [Frontend](https://github.com/Steve-droid/driftplain-frontend) · [Backend](https://github.com/Steve-droid/driftplain-backend) · [Infra](https://github.com/Steve-droid/driftplain-infra) · **GitOps**
+[Project overview](https://github.com/Steve-droid/driftplain) · [Open the app](https://driftplain.dev) · [Frontend](https://github.com/Steve-droid/driftplain-frontend) · [Backend](https://github.com/Steve-droid/driftplain-backend) · [Infrastructure](https://github.com/Steve-droid/driftplain-infra)
 
-Driftplain picks a cheaper LLM for code review from benchmark data and runs it in the user's CI
-on the user's own API key. There are two agents. The review agent makes one API call with the PR
-diff and the user's review preferences. The security agent runs an agentic loop with OpenCode
-over the checkout and reports vulnerabilities. The dashboard shows the money saved while review
-quality holds.
+This repo defines how Driftplain runs in Kubernetes. Helm charts describe the application
+and its supporting services. ArgoCD watches `main` and keeps the cluster in sync with those
+definitions.
 
-This repo is the desired state of everything inside the Kubernetes cluster: a Helm umbrella for
-the app, in-repo charts for the platform pieces, and an ArgoCD app-of-apps that reconciles them.
-Since September 22, 2026 the live cluster is a single-node K3s on a home Ubuntu server
-([migration record](https://github.com/Steve-droid/driftplain-infra/blob/main/home-server/HM7-CUTOVER.md)).
-ArgoCD is the only thing that applies to it.
+The live deployment is a single-node K3s cluster on an Ubuntu home server, reached through
+Cloudflare Tunnel. The [infrastructure repo](https://github.com/Steve-droid/driftplain-infra)
+prepares that server and manages AWS and Cloudflare. This repo manages the workloads inside it.
 
-## How a change reaches the cluster
+## How deployment works
 
-1. An app repo pushes a tag. GitHub Actions builds the image and pushes it to
-   `ghcr.io/steve-droid/modelmatch-<image>:X.Y.Z`. The job summary prints the digest.
-2. A PR here pins that digest in `charts/modelmatch/values-home-server.yaml`.
-3. On merge, ArgoCD on the home server (prune and selfHeal) rolls it out.
+1. A release tag in an app repo triggers GitHub Actions to publish an image to GHCR.
+2. A PR here updates the image digest in
+   [values-home-server.yaml](charts/modelmatch/values-home-server.yaml). The digest identifies
+   the exact image to run.
+3. After the PR merges, ArgoCD applies the change and Kubernetes rolls out the new image.
 
-Every change goes through this repo. To deploy a new image, change the digest in the values
-file and open a PR. To change how something is deployed, edit the chart and open a PR. Nothing
-is applied to the cluster with `helm install` or `kubectl apply` by hand, so the cluster always
-matches `main`.
+Publishing an image does not deploy it. Application and cluster configuration changes go
+through this repo. ArgoCD also corrects changes made directly to resources it manages and
+removes managed resources deleted from Git.
 
-If a backend release changes the database schema, the Alembic migration runs first as a Job in
-the Postgres chart, and the backend digest is updated only after it succeeds.
+Database migrations are a separate step. The PostgreSQL chart includes an Alembic migration
+Job, but the home-server profile disables automatic migration and seed jobs to protect the
+restored production database. A schema-changing release needs an explicit migration before
+the new backend is deployed. The backend never runs migrations at startup.
 
-## Layout
+## Main components
 
-```
-argocd/home-server/     the live profile: root.yaml (app-of-apps) and apps/ for cnpg-operator, modelmatch-postgres,
-                        sealed-secrets, cert-manager, nginx-ingress (ClusterIP), cluster-issuers (private CA),
-                        app-secrets (sealed), modelmatch, monitoring and dashboards, backup, heartbeat, cloudflared
-argocd/apps/            the retired AWS EKS profile, kept as a reference render
-charts/modelmatch/      the product umbrella: backend and frontend subcharts, host-based Ingress templates,
-                        values.yaml (contract) and values-home-server.yaml (GHCR digests, fake LLM and blob, no IRSA)
-charts/modelmatch-postgres/   CloudNativePG Cluster, storage class, migrate and seed Jobs
-charts/{cluster-issuers, app-secrets, monitoring, logging}     platform children
-charts/home-server-{backup, heartbeat, cloudflared}            home only: hourly encrypted export to S3, edge heartbeat, tunnel connector
-tests/                  offline render and contract tests (pytest, no cluster)
-scripts/recompute-host.sh   AWS-era sslip.io host recompute, unused on the home server
-docs/diagrams/          CNPG operator and Cluster CR (draw.io)
-```
+| Path | Purpose |
+|---|---|
+| [argocd/home-server/root.yaml](argocd/home-server/root.yaml) | Root ArgoCD application. It creates and manages the child applications in the home-server profile. |
+| [argocd/home-server/apps](argocd/home-server/apps/) | Child applications for the app, database, ingress, certificates, monitoring, backups and tunnel. |
+| [charts/modelmatch](charts/modelmatch/) | Parent Helm chart containing frontend and backend subcharts, plus application ingress rules. |
+| [charts/modelmatch-postgres](charts/modelmatch-postgres/) | PostgreSQL managed by CloudNativePG, persistent storage, and optional migration and seed jobs. |
+| [charts/cluster-issuers](charts/cluster-issuers/) | Certificate issuers used by cert-manager. The home profile uses a private certificate authority. |
+| [argocd/home-server/sealed](argocd/home-server/sealed/) | Encrypted application credentials that the Sealed Secrets controller decrypts inside the cluster. |
+| [charts/monitoring](charts/monitoring/) | Grafana dashboards. The monitoring ArgoCD application configures Prometheus and alert rules. |
+| [charts/home-server-backup](charts/home-server-backup/) | Hourly encrypted PostgreSQL exports to S3. |
+| [charts/home-server-heartbeat](charts/home-server-heartbeat/) | Checks cluster alerts and public endpoints, then sends a heartbeat to an external monitor. |
+| [charts/home-server-cloudflared](charts/home-server-cloudflared/) | Cloudflare Tunnel connector and its configuration. |
+| [tests](tests/) | Local chart-rendering tests for hosts, image pins, storage, resource limits and migration behavior. |
 
-## Check a change offline
+The `modelmatch` chart and image names remain from the project's original name.
+
+## Home-server configuration
+
+The app moved from EKS to the home server in September 2026. Shared charts still support
+the original AWS configuration; `values-home-server.yaml` files supply the home-server settings.
+
+- Frontend and backend images come from public GHCR and are pinned by digest.
+- PostgreSQL runs as one CloudNativePG instance with persistent local storage.
+- Cloudflare Tunnel routes public traffic to the cluster's private NGINX ingress.
+- cert-manager provides certificates for the private ingress, and Sealed Secrets manages app credentials.
+- The backend uses fake model and blob clients. The hosted chat assistant reports that it is offline.
+
+The former EKS application definitions remain in [argocd/apps](argocd/apps/) for reference.
+The home-server root watches its own directory and does not deploy them. AWS-specific charts,
+including the original logging setup, remain alongside the shared charts.
+
+## Check a change locally
+
+Install Helm and `uv`, then run:
 
 ```bash
 helm lint charts/modelmatch
-helm template modelmatch charts/modelmatch -f charts/modelmatch/values.yaml -f charts/modelmatch/values-home-server.yaml
+helm template modelmatch charts/modelmatch \
+  -f charts/modelmatch/values.yaml \
+  -f charts/modelmatch/values-home-server.yaml
 uv run --with pyyaml --with pytest pytest tests
 ```
 
-The tests assert that the home-server values render what is documented (digests, hosts, fake seams,
-limits on every container, probes on `/healthz` and `/readyz`) and that the retired AWS profile
-still renders unchanged.
+These checks render manifests and verify their configuration without connecting to a cluster.
+The tests cover both the home-server profile and the retained AWS configuration.
 
-## How the home server differs from the original EKS deployment
-
-The charts were written for EKS. `values-home-server.yaml` and `argocd/home-server/` adapt them
-to the single-node K3s cluster on the home Ubuntu server:
-
-- Images come from public GHCR by digest, so no registry token can expire.
-- `LLM_CLIENT=fake` and `BLOB_STORE=fake`, no IRSA. The pod holds no AWS identity. The chat
-  answers that the assistant is offline; everything else is live.
-- Private hosts `app.home-server.driftplain.dev` and `api.home-server.driftplain.dev` use the
-  `home-server-ca` issuer. The public `driftplain.dev` and `staging.driftplain.dev` pairs arrive
-  through the Cloudflare tunnel.
-- App credentials are Sealed Secrets. The sealing keys are backed up off the machine.
-
-## Conventions
-
-- `feature/<slice>-<description>`, then a PR to `main`. Conventional Commits. A SemVer tag per merged slice.
-- One reviewed change per PR to the home-server values. Digest pins only, never `latest`.
-- Every container has requests and limits. Migrations never run on backend startup.
-
-Steve Levit, stevelevit230@gmail.com
+For bootstrap and recovery, follow the infrastructure repo's
+[operations guide](https://github.com/Steve-droid/driftplain-infra/blob/main/home-server/HM5-OPERATIONS.md)
+and [lost-host recovery guide](https://github.com/Steve-droid/driftplain-infra/blob/main/home-server/HM5-LOST-HOST-RECOVERY.md).
