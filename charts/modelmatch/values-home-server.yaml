@@ -8,8 +8,8 @@
 # What differs, and why:
 #   • Images: public GHCR, pinned by digest. Agents are the 1.1.3 ECR copies (crane copy,
 #     digest equals the ECR source). Backend 1.0.25 was built locally from its tag (the honest
-#     offline chat answer for LLM_CLIENT=fake). Frontend 1.0.25 is the first image published by
-#     the GitHub Actions release workflow (run 35668758676): the temporary-demo notice is gone.
+#     offline chat answer for LLM_CLIENT=fake). Frontend 1.0.26 comes from the GitHub Actions
+#     release workflow: no temporary-demo notice, privacy policy for the home deployment.
 #   • No IRSA: there is no EKS webhook. `irsaRoleName: ""` omits the annotation; the pod then
 #     holds NO AWS identity (the Roles Anywhere mount is a separate HM5 approval).
 #   • Isolated validation: LLM_CLIENT=fake and BLOB_STORE=fake — no Bedrock call, no S3 write.
@@ -57,4 +57,4 @@ backend:
 frontend:
   image:
     registry: ghcr.io/steve-droid
-    digest: "sha256:592ed15e2b2010394d00ec36f20fd0fd58d8d6b66c73a9d90801750556d0fea0"
+    digest: "sha256:e945ec580aa3692d0ed181c7b45d1291e10aa4eba0afe972b435fa0250f0671f"
