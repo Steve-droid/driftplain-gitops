@@ -1,0 +1,71 @@
+{{- if .Values.enabled }}
+{{- $root := . }}
+{{- range $index, $source := keys .Values.sources | sortAlpha }}
+{{- if index $root.Values.sources $source }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: catalog-refresh-{{ $source }}
+  labels:
+    app.kubernetes.io/name: catalog-refresh
+    catalog-source: {{ $source }}
+spec:
+  schedule: {{ printf "%d */6 * * *" (mul $index 3) | quote }}
+  timeZone: Etc/UTC
+  suspend: {{ $root.Values.suspend }}
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 600
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 300
+      ttlSecondsAfterFinished: 86400
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: catalog-refresh
+            catalog-source: {{ $source }}
+        spec:
+          restartPolicy: Never
+          terminationGracePeriodSeconds: 10
+          serviceAccountName: {{ $root.Values.serviceAccountName }}
+          automountServiceAccountToken: false
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: importer
+              image: {{ $root.Values.image | quote }}
+              imagePullPolicy: IfNotPresent
+              command: ["python", "-m", "app.catalog.imports.scheduled"]
+              args: ["--source", {{ $source | quote }}, "--refresh"]
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              env:
+                - name: DATABASE_URL
+                  valueFrom:
+                    configMapKeyRef:
+                      name: {{ $root.Values.backendConfigMap }}
+                      key: DATABASE_URL
+                - name: PGPASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ $root.Values.appSecretName }}
+                      key: POSTGRES_PASSWORD
+                - name: PYTHONDONTWRITEBYTECODE
+                  value: "1"
+              resources:
+                requests: {cpu: 25m, memory: 96Mi}
+                limits: {cpu: 250m, memory: 256Mi}
+{{- end }}
+{{- end }}
+{{- end }}
