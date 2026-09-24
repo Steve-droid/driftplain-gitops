@@ -45,3 +45,9 @@ over SSH; the initial admin password is the `argocd-initial-admin-secret` Secret
 The owner basic-auth Secret `app/modelmatch-db-app` is **not** in Git: home has no
 ESO. It is created by the operator from the age-encrypted HM3 credential bundle
 (same original value) and moves to Sealed Secrets in HM4.
+## Prepared catalog refresh (September 24, 2026)
+
+The [B16 chart](../../../charts/home-server-catalog-refresh/README.md) is disabled,
+suspended and deliberately outside this watched root. No scheduler Application or
+application image bump is included. Adding a child and enabling any checks requires
+separate deployment/import authorization; see the chart's staged rollout procedure.

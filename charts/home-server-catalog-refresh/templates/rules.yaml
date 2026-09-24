@@ -1,0 +1,39 @@
+{{- if and .Values.enabled (not .Values.suspend) .Values.monitoring.enabled }}
+{{- $root := . }}
+{{- range $source, $enabled := .Values.sources }}
+{{- if $enabled }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: catalog-refresh-{{ $source }}
+  labels:
+    release: {{ $root.Values.monitoring.releaseLabel }}
+spec:
+  groups:
+    - name: catalog-refresh-{{ $source }}
+      rules:
+        - alert: CatalogRefreshMissed
+          expr: >-
+            (modelmatch_catalog_missed_check{source="{{ $source }}"} == 1)
+            or absent(modelmatch_catalog_missed_check{source="{{ $source }}"})
+          for: 15m
+          labels: {severity: warning, source: {{ $source }}}
+          annotations:
+            summary: "Catalog source has no successful check within seven hours"
+            description: "Inspect source health and job events; acquisition freshness does not imply recent content."
+        - alert: CatalogRefreshFailed
+          expr: modelmatch_catalog_failure_count{source="{{ $source }}"} > 0
+          for: 5m
+          labels: {severity: warning, source: {{ $source }}}
+          annotations:
+            summary: "Catalog refresh failed; last accepted snapshot retained"
+        - alert: CatalogReportReviewPending
+          expr: modelmatch_catalog_pending_review{source="{{ $source }}"} == 1
+          for: 1h
+          labels: {severity: warning, source: {{ $source }}}
+          annotations:
+            summary: "Fetched report requires exact-hash human review"
+{{- end }}
+{{- end }}
+{{- end }}

@@ -1,0 +1,31 @@
+# Not referenced by any watched ArgoCD Application. Enabling is separate operations.
+enabled: false
+suspend: true
+# Required digest of a verified B16-or-newer backend image. No implicit live pin.
+image: ""
+backendConfigMap: modelmatch-backend-config
+appSecretName: modelmatch-app-secrets
+serviceAccountName: modelmatch-backend
+monitoring:
+  enabled: false
+  releaseLabel: kube-prometheus-stack
+sources:
+  gpqa-diamond: false
+  hle: false
+  mmlu-pro: false
+  aime-2025: false
+  frontiermath-tier4-v2: false
+  arc-agi-2: false
+  swe-bench-verified: false
+  terminal-bench-4: false
+  mrcr-v2: false
+  osworld-verified: false
+  deepswe-1-1: false
+  livecodebench-v5: false
+  livebench-2026-06-25: false
+  codereviewbench: false
+  realvuln-3-1-0: false
+  testgeneval: false
+  swt-bench: false
+  logdx-ci: false
+  ci-repair-bench: false

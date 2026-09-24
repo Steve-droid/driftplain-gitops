@@ -1,0 +1,158 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "enabled",
+    "suspend",
+    "image",
+    "sources",
+    "monitoring",
+    "backendConfigMap",
+    "appSecretName",
+    "serviceAccountName"
+  ],
+  "properties": {
+    "enabled": {
+      "type": "boolean"
+    },
+    "suspend": {
+      "type": "boolean"
+    },
+    "image": {
+      "type": "string",
+      "pattern": "^$|^ghcr\\.io/steve-droid/driftplain-backend@sha256:[a-f0-9]{64}$"
+    },
+    "backendConfigMap": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9.-]{0,62}$"
+    },
+    "appSecretName": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9.-]{0,62}$"
+    },
+    "serviceAccountName": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9.-]{0,62}$"
+    },
+    "monitoring": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "releaseLabel"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "releaseLabel": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]{0,62}$"
+        }
+      }
+    },
+    "sources": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "gpqa-diamond",
+        "hle",
+        "mmlu-pro",
+        "aime-2025",
+        "frontiermath-tier4-v2",
+        "arc-agi-2",
+        "swe-bench-verified",
+        "terminal-bench-4",
+        "mrcr-v2",
+        "osworld-verified",
+        "deepswe-1-1",
+        "livecodebench-v5",
+        "livebench-2026-06-25",
+        "codereviewbench",
+        "realvuln-3-1-0",
+        "testgeneval",
+        "swt-bench",
+        "logdx-ci",
+        "ci-repair-bench"
+      ],
+      "properties": {
+        "gpqa-diamond": {
+          "type": "boolean"
+        },
+        "hle": {
+          "type": "boolean"
+        },
+        "mmlu-pro": {
+          "type": "boolean"
+        },
+        "aime-2025": {
+          "type": "boolean"
+        },
+        "frontiermath-tier4-v2": {
+          "type": "boolean"
+        },
+        "arc-agi-2": {
+          "type": "boolean"
+        },
+        "swe-bench-verified": {
+          "type": "boolean"
+        },
+        "terminal-bench-4": {
+          "type": "boolean"
+        },
+        "mrcr-v2": {
+          "type": "boolean"
+        },
+        "osworld-verified": {
+          "type": "boolean"
+        },
+        "deepswe-1-1": {
+          "type": "boolean"
+        },
+        "livecodebench-v5": {
+          "type": "boolean"
+        },
+        "livebench-2026-06-25": {
+          "type": "boolean"
+        },
+        "codereviewbench": {
+          "type": "boolean"
+        },
+        "realvuln-3-1-0": {
+          "type": "boolean"
+        },
+        "testgeneval": {
+          "type": "boolean"
+        },
+        "swt-bench": {
+          "type": "boolean"
+        },
+        "logdx-ci": {
+          "type": "boolean"
+        },
+        "ci-repair-bench": {
+          "type": "boolean"
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "enabled": {
+            "const": true
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "image": {
+            "minLength": 1
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+apiVersion: v2
+name: home-server-catalog-refresh
+description: Independent bounded catalog checks; opt-in and suspended by default.
+type: application
+version: 0.1.0
+appVersion: "1.15.0"
