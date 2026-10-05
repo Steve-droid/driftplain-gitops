@@ -8,7 +8,7 @@
 # Applications are the flat files in that directory (cnpg-operator, modelmatch-
 # postgres in HM3; the app/ingress/secrets children join in HM4 under this same root).
 #
-# Bootstrap (see driftplain-infra/home-server/HM3-RESTORE.md):
+# Bootstrap (see driftplain-infra/home-server/docs/HM3-RESTORE.md):
 #   helm template argocd argo/argo-cd --version 9.5.21 -n argocd --include-crds \
 #     -f argocd/home-server/argocd-values.yaml | kubectl apply --server-side -n argocd -f -
 #   kubectl apply -n argocd -f argocd/home-server/root.yaml

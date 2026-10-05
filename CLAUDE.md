@@ -47,7 +47,7 @@ This policy overrides older image-naming statements below; it does not authorize
 ## AWS compute retired — September 21, 2026
 
 The EKS cluster no longer exists (see
-[AWS-COMPUTE-RETIREMENT.md](../driftplain-infra/home-server/AWS-COMPUTE-RETIREMENT.md)). The
+[AWS-COMPUTE-RETIREMENT.md](../driftplain-infra/home-server/docs/AWS-COMPUTE-RETIREMENT.md)). The
 AWS profile (`argocd/` root apps, `values.yaml`/`values-dev.yaml`, ECR pins) is now a **reference
 render only**: keep `test_home_server_profile.py` asserting it renders unchanged, but nothing
 reconciles it and no image bump for it has any effect. The home root (`argocd/home-server/`) is
