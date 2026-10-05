@@ -10,7 +10,7 @@ source path is `argocd/apps`, not this directory.
 | `root.yaml` | The home **root App-of-Apps** (`home-server-root`): the one operator-applied seed. Watches this directory's `apps/` on `main`, non-recursive, prune + selfHeal. The home counterpart of Terraform's `argocd-apps` release on AWS. | HM3 |
 | `apps/cnpg-operator.yaml` | CloudNativePG operator, chart 0.29.0 / operator 1.30.0 — the series that lists Kubernetes 1.36 as supported (1.29 only *tests* 1.36 and reaches EOL September 29, 2026). AWS stays on its own pin; it is not upgraded by this profile. | HM3 |
 | `apps/modelmatch-postgres.yaml` | The same in-repo Postgres chart as AWS, rendered with `values-home-server.yaml`: one instance, `home-server-retain` local-path storage, no ESO, no migrate/seed hooks. | HM3 |
-| `apps/sealed-secrets.yaml` | Sealed Secrets controller (chart 2.20.0 / 0.40.0, ns `sealed-secrets`, wave -2): unseals the committed SealedSecret manifests; its sealing keys are backed up age-encrypted off-machine (infra `home-server/HM4-HOME-APP.md`). Home has no ESO. | HM4 |
+| `apps/sealed-secrets.yaml` | Sealed Secrets controller (chart 2.20.0 / 0.40.0, ns `sealed-secrets`, wave -2): unseals the committed SealedSecret manifests; its sealing keys are backed up age-encrypted off-machine (infra `home-server/docs/HM4-HOME-APP.md`). Home has no ESO. | HM4 |
 | `apps/cert-manager.yaml` | cert-manager v1.20.2 (the AWS pin), wave -1. Signs the Ingress leaf certs from the private CA below; no ACME at home. | HM4 |
 | `apps/nginx-ingress.yaml` | F5 NGINX Ingress Controller 2.6.0 (the AWS pin) with a **ClusterIP** Service, wave 0: no LoadBalancer/NLB/NodePort — reached by SSH port-forward (HM4) and the tunnel connector (HM5). | HM4 |
 | `apps/app-secrets.yaml` | Directory source `sealed/` (wave 0): the two SealedSecret manifests for the app credentials, generated from the original HM3 bundle in strict scope; the controller adopted the pre-existing owner Secret unchanged. | HM4 |
@@ -24,7 +24,7 @@ private `*.home-server.driftplain.dev` hosts) once the images are published and 
 sealing keys are backed up.** The root syncs from `main`, so a child change only takes
 effect after its PR is merged. Contract tests: `tests/test_home_server_profile.py`.
 
-## Bootstrap (once per home cluster; runbook: infra `home-server/HM3-RESTORE.md`)
+## Bootstrap (once per home cluster; runbook: infra `home-server/docs/HM3-RESTORE.md`)
 
 Home has no `helm` binary: render on the Mac, apply over `ssh home-server` with the
 explicit K3s kubeconfig/context. Every wait is bounded.

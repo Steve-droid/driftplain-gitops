@@ -81,5 +81,5 @@ These checks render manifests and verify their configuration without connecting 
 The tests cover both the home-server profile and the retained AWS configuration.
 
 For bootstrap and recovery, follow the infrastructure repo's
-[operations guide](https://github.com/Steve-droid/driftplain-infra/blob/main/home-server/HM5-OPERATIONS.md)
-and [lost-host recovery guide](https://github.com/Steve-droid/driftplain-infra/blob/main/home-server/HM5-LOST-HOST-RECOVERY.md).
+[operations guide](https://github.com/Steve-droid/driftplain-infra/blob/main/home-server/docs/HM5-OPERATIONS.md)
+and [lost-host recovery guide](https://github.com/Steve-droid/driftplain-infra/blob/main/home-server/docs/HM5-LOST-HOST-RECOVERY.md).

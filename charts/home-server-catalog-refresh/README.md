@@ -61,5 +61,5 @@ review the GitOps change. Suspension does not terminate an already started Job.
 Wait for its bounded completion; cancelling a running production Job is an explicit
 operator action. Review pending report bytes and snapshot reversal using the backend
 [operator contract](https://github.com/Steve-droid/driftplain-backend/blob/main/app/catalog/imports/OPERATIONS.md).
-The [home runbook](https://github.com/Steve-droid/driftplain-infra/blob/main/home-server/CATALOG-REFRESH.md)
+The [home runbook](https://github.com/Steve-droid/driftplain-infra/blob/main/home-server/docs/CATALOG-REFRESH.md)
 covers recovery, storage and operational gates. Do not delete data to resolve an alert.
