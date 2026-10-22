@@ -192,10 +192,12 @@ class HomeUmbrellaProfileTests(unittest.TestCase):
         self.docs = render(UMBRELLA, "values.yaml", "values-home-server.yaml", namespace="app", release="modelmatch")
 
     def test_images_are_public_ghcr_pinned_by_digest(self):
-        for name in ("modelmatch-backend", "modelmatch-frontend"):
+        # Workload names stay modelmatch-*; images use the driftplain-* packages since 2.1.0.
+        for name, package in (("modelmatch-backend", "driftplain-backend"),
+                              ("modelmatch-frontend", "driftplain-frontend")):
             image = containers(self.docs, name)[0]["image"]
             registry_repo, _, digest = image.partition("@")
-            self.assertEqual(registry_repo, f"{GHCR}/{name}")
+            self.assertEqual(registry_repo, f"{GHCR}/{package}")
             self.assertRegex(digest, DIGEST)
 
     def test_no_aws_only_pieces(self):
