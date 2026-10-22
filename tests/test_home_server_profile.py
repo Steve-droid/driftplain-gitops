@@ -253,7 +253,7 @@ class HomeUmbrellaProfileTests(unittest.TestCase):
         self.assertEqual(config["CHAT_READONLY_DB_USER"], "modelmatch_chat_ro")
         for key in ("AGENT_IMAGE", "AGENT_SECURITY_IMAGE"):
             registry_repo, _, digest = config[key].partition("@")
-            self.assertTrue(registry_repo.startswith(GHCR + "/modelmatch-agent"), config[key])
+            self.assertTrue(registry_repo.startswith(GHCR + "/driftplain-agent"), config[key])
             self.assertRegex(digest, DIGEST)
         frontend = self.docs["ConfigMap", "modelmatch-frontend-config"]["data"]
         self.assertEqual(frontend["API_BASE_URL"], f"https://{RUNTIME_API_HOST}")
