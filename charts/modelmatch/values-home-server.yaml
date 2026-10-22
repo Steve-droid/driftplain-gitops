@@ -8,7 +8,7 @@
 # What differs, and why:
 #   • Images: public GHCR, pinned by digest. Agents are 1.8.0 (driftplain-agent and
 #     driftplain-agent-security, October 22, 2026), which read the v2 execution config that
-#     the CI setup page generates; the previous 1.1.3 pins were modelmatch-agent copies. Backend 2.1.0 and frontend 2.1.0 (benchmark hub,
+#     the CI setup page generates; the previous 1.1.3 pins were modelmatch-agent copies. Backend 2.1.0 and frontend 2.1.1 (benchmark hub; 2.1.1 fixes Set up CI choice feedback,
 #     October 22, 2026) come from the GitHub Actions release workflows under the driftplain-*
 #     names; the schema was migrated to b16c0a7a0001 by an explicit Job first. The revert point
 #     (backend 1.0.25 / frontend 1.0.26 digests) is in infra home-server/docs/ROLLOUT-2026-10-22.md.
@@ -61,4 +61,4 @@ frontend:
   image:
     registry: ghcr.io/steve-droid
     repository: driftplain-frontend
-    digest: "sha256:0a107cdc3485223cc723094c03749dfcfc049cf998a2d1ff882d24e9c6daf38b"
+    digest: "sha256:3d2be96f087b55d765327c99d44f7e1b85ea18207f675895af59df755ce939f8"
