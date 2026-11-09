@@ -1,0 +1,31 @@
+# Backup freshness for the home Prometheus (kube-prometheus-stack selects every PrometheusRule:
+# ruleSelectorNilUsesHelmValues=false). Rendered only while enabled so a suspended CronJob
+# raises no alert. A single failed run stays the stock KubeJobFailed warning; this rule is the
+# one that withholds the cluster heartbeat.
+{{- if and .Values.enabled .Values.staleAlert.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: home-server-backup
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: home-server-backup
+    app.kubernetes.io/part-of: driftplain-home-server
+spec:
+  groups:
+    - name: home-server-backup.rules
+      rules:
+        # kube-state-metrics reads the timestamp from the CronJob status, so it survives pod and
+        # node restarts. `for: 5m` keeps one missed run (staleness peaks at about two hours just
+        # as the next run finishes) from firing; two consecutive misses do.
+        - alert: HomeServerBackupStale
+          expr: >-
+            time() - kube_cronjob_status_last_successful_time{namespace="{{ .Release.Namespace }}",cronjob="home-server-backup"}
+            > {{ int .Values.staleAlert.afterSeconds }}
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "No successful home PostgreSQL backup for more than two hours"
+            description: "The hourly export CronJob has not completed; read the newest failed pod's log in this namespace."
+{{- end }}

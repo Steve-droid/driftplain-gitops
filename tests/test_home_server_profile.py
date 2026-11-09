@@ -754,6 +754,33 @@ class HomeBackupChartTests(unittest.TestCase):
         image = job["spec"]["jobTemplate"]["spec"]["template"]["spec"]["containers"][0]["image"]
         self.assertEqual(image, f"ghcr.io/steve-droid/home-server-backup@{digest}")
 
+    def test_failed_runs_retry_inside_the_job_deadline(self):
+        spec = render(BACKUP, namespace="home-server-backups")["CronJob", "home-server-backup"]["spec"]
+        job = spec["jobTemplate"]["spec"]
+        self.assertEqual(job["backoffLimit"], 5)
+        self.assertEqual(job["template"]["spec"]["restartPolicy"], "Never")
+        self.assertEqual(spec["concurrencyPolicy"], "Forbid")
+        # Pod back-off doubles from 10 s; every retry must be able to start before the deadline.
+        waits = sum(10 * 2 ** n for n in range(job["backoffLimit"]))
+        self.assertLess(waits, job["activeDeadlineSeconds"])
+
+    def test_stale_backup_alert_is_critical_and_rendered_only_while_enabled(self):
+        docs = render(BACKUP, namespace="home-server-backups")
+        rule_doc = docs["PrometheusRule", "home-server-backup"]
+        self.assertEqual(rule_doc["metadata"]["namespace"], "home-server-backups")
+        (rule,) = rule_doc["spec"]["groups"][0]["rules"]
+        self.assertEqual(rule["alert"], "HomeServerBackupStale")
+        self.assertEqual(rule["labels"]["severity"], "critical")  # critical = heartbeat withheld
+        self.assertEqual(rule["for"], "5m")
+        self.assertIn("summary", rule["annotations"])
+        self.assertEqual(
+            " ".join(rule["expr"].split()),
+            'time() - kube_cronjob_status_last_successful_time'
+            '{namespace="home-server-backups",cronjob="home-server-backup"} > 7200')
+        for sets in (("enabled=false",), ("staleAlert.enabled=false",)):
+            off = render(BACKUP, namespace="home-server-backups", sets=sets)
+            self.assertNotIn(("PrometheusRule", "home-server-backup"), off, sets)
+
     def test_children_are_gated_and_namespaced(self):
         backup = load(HOME_APPS / "backup.yaml")
         self.assertEqual(backup["spec"]["source"]["path"], "charts/home-server-backup")
