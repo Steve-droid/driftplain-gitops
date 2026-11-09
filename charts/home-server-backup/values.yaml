@@ -37,3 +37,15 @@ resources:
   limits: { cpu: 500m, memory: 256Mi }
 workSizeLimit: 1Gi
 activeDeadlineSeconds: 900
+# Retries per scheduled run. Every attempt stamps its own postgres/<tier>/cluster-<stamp> prefix,
+# so a retry never overwrites anything. 5 retries start about 22 s, 54 s, 106 s, 198 s and 370 s
+# after the first failure: enough to ride out a network loss of a few minutes (the November 9,
+# 2026 miss was an 8.5-minute Ethernet outage that ended 150 s into the run) and still inside
+# activeDeadlineSeconds.
+backoffLimit: 5
+staleAlert:
+  # HomeServerBackupStale (critical, so the cluster heartbeat is withheld): the CronJob's last
+  # success is older than afterSeconds. Two hours = two consecutive missed hourly runs, the limit
+  # in driftplain-infra home-server/docs/S3-BACKUPS.md. Rendered only while `enabled`.
+  enabled: true
+  afterSeconds: 7200

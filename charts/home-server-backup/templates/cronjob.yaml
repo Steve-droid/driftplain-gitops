@@ -20,7 +20,9 @@ spec:
   failedJobsHistoryLimit: 3
   jobTemplate:
     spec:
-      backoffLimit: 0
+      # Failed attempts are retried inside the same Job (delays 10 s, 20 s, 40 s, ... between
+      # pods); activeDeadlineSeconds still bounds the whole Job, retries included.
+      backoffLimit: {{ .Values.backoffLimit }}
       activeDeadlineSeconds: {{ .Values.activeDeadlineSeconds }}
       ttlSecondsAfterFinished: 86400
       template:

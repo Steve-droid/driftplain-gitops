@@ -5,5 +5,5 @@ description: >-
   with the write-only Roles Anywhere backup leaf. Suspended until sessions, image and the
   sealed owner credential exist.
 type: application
-version: 0.1.0
+version: 0.2.0
 appVersion: "1.0.0"
